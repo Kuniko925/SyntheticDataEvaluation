@@ -21,6 +21,9 @@ label_to_class = {0: 'airplane',
                       8: 'ship',
                       9: 'truck'}
 
+def make_class_to_label() -> dict[str, int]:
+    return {class_name: label for label, class_name in label_to_class.items()}
+
 def build_res_filepath(dataset, model=None):
     if model is None:
         return [
