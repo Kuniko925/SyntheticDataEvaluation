@@ -88,7 +88,7 @@ def run_training(model_class, conf, db):
 
     def preparation(model_name, db):
         # Preparation
-        model_save_directory = config.PROJECT_ROOT / f"{config.CFG[db]['DB']}/{model_name}/{db}/" # e.g., cifake1/MobileNet/FAKE/
+        model_save_directory = config.PROJECT_ROOT / db / f"{config.CFG[db]['DB']}/{model_name}/{db}/" # e.g., cifake1/MobileNet/FAKE/
         utils.create_directory(model_save_directory)
         utils.delete_subfolders(model_save_directory)
         return model_save_directory
@@ -123,13 +123,13 @@ class TrainConf:
     num_epochs: int
 
 def ResNetConf():
-    return TrainConf("ResNet50", 1e-2, 32, (32, 32), 100)
+    return TrainConf("ResNet50", 1e-2, 32, (32, 32), 50)
 
 def MobileNetConf():
-    return TrainConf("MobileNetV2", 1e-2, 32, (32, 32), 100)
+    return TrainConf("MobileNetV2", 1e-2, 32, (32, 32), 50)
 
 def ViT16Conf():
-    return TrainConf("ViT16", 1e-5, 64, (224, 224), 100)
+    return TrainConf("ViT16", 1e-5, 64, (224, 224), 50)
 
 if __name__== "__main__":
 
