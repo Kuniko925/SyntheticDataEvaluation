@@ -40,7 +40,7 @@ if __name__== "__main__":
         ims = []
 
         for ax, m in zip(axes, models):
-            csv_path = config.PROJECT_ROOT / config.build_res_filepath(data_type, m)
+            csv_path = config.build_res_filepath(data_type, m)
 
             cm_raw, class_names, im = plotting.plot_confusion_matrix_from_performance(
                 csv_path,
