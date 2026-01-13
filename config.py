@@ -8,7 +8,7 @@ CFG = {
     "FAKE2": {"DB": "cifake2", "FileName": "real_real.csv", "ImageDir": "cifake2/train/FAKE"},
 }
 
-MODELS = ["ResNet50Model", "MobileNetV2", "ViT16"]
+MODELS = ["ResNet50", "MobileNetV2", "ViT16"]
 
 label_to_class = {0: 'airplane',
                       1: 'automobile',
