@@ -13,18 +13,18 @@ from sklearn.manifold import TSNE
 from transformers import CLIPProcessor, CLIPModel
 import config
 
-def reduce_dim(image_embeddings, reducer, model_name, reducer_name):
+def reduce_dim(df_train, image_embeddings, reducer, model_name, reducer_name, db='FAKE1'):
     embeddings_2d = reducer.fit_transform(image_embeddings)
     df_train['embeddings x'] = embeddings_2d[:,0]
     df_train['embeddings y'] = embeddings_2d[:,1]
-    save_filepath = config.PROJECT_ROOT / f'results/embed_{model_name}_{reducer_name}.csv'
+    save_filepath = config.PROJECT_ROOT / f'results/embed_{db}_{model_name}_{reducer_name}.csv'
     df_train.to_csv(save_filepath, index=False)
     return embeddings_2d
 
 
-def plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name):
+def plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name, db='FAKE1'):
     title = f"{model_name} Embeddings per Class by {reducer_name}"
-    save_filepath = config.PROJECT_ROOT / f'results/{model_name}_{reducer_name}.png'
+    save_filepath = config.PROJECT_ROOT / f'results/{db}_{model_name}_{reducer_name}.png'
 
     color_map = {0: "lightpink", 1: "lightblue"}
     rf_label_map = {0: "GEN", 1: "REAL"}
@@ -33,7 +33,7 @@ def plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name):
     fig, axes = plt.subplots(2, 5, figsize=(20, 8))
     axes = axes.flatten()
 
-    for i in range(num_class):
+    for i in range(len(config.label_to_class)):
         ax = axes[i]
         area_dict = {}
 
@@ -81,16 +81,15 @@ def plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name):
         ax.grid(True)
         ax.legend(fontsize=10)
 
-    # plt.suptitle(title, fontsize=16)
     plt.tight_layout()
     plt.savefig(save_filepath)
     plt.close(fig)
 
 
-def save_distance(embeddings_2d, labels, reals, model_name, reducer_name):
+def save_distance(embeddings_2d, labels, reals, model_name, reducer_name, db='FAKE1'):
     results = {}
 
-    for i in range(len(class_labels)):  # Class
+    for i in range(len(config.label_to_class)):  # Class
         results[i] = {}
         # REAL:1, FAKE:0
         subset = (labels == i) & (reals == 1)
@@ -124,24 +123,49 @@ def save_distance(embeddings_2d, labels, reals, model_name, reducer_name):
     df_dino.reset_index(inplace=True)
     df_dino.rename(columns={'index': 'label'}, inplace=True)
 
-    save_filepath = config.PROJECT_ROOT / f'results/dis_{model_name}_{reducer_name}.csv'
+    save_filepath = config.PROJECT_ROOT / f'results/dis_{db}_{model_name}_{reducer_name}.csv'
     df_dino.to_csv(save_filepath, index=False)
+
+@torch.no_grad()
+def extract_embeddings(images, model_name, hf_id, batch_size, num_workers):
+    model_name_upper = model_name.upper()
+    if model_name_upper == "CLIP":
+        processor = CLIPProcessor.from_pretrained(hf_id)
+        model = CLIPModel.from_pretrained(hf_id, use_safetensors=True).to(device).eval()
+    else:
+        processor = AutoImageProcessor.from_pretrained(hf_id, use_fast=True)
+        model = AutoModel.from_pretrained(hf_id).to(device).eval()
+
+    image_embeddings = []
+    for img in tqdm(images):
+        inputs = processor(images=img, return_tensors="pt").to(device)
+        if model_name_upper == "CLIP":
+            feats = model.get_image_features(**inputs)
+        else:
+            outputs = model(**inputs)
+            feats = outputs.last_hidden_state.mean(dim=1)
+        image_embeddings.append(feats.cpu().numpy().flatten())
+
+    return np.array(image_embeddings)
+
+
+def run_reduction_pipeline(
+        df_train,
+        embeddings: np.ndarray,
+        labels: np.ndarray,
+        reals: np.ndarray,
+        model_name: str,
+        reducer_name: str,
+        reducer,
+        db
+):
+    embeddings_2d = reduce_dim(df_train, embeddings, reducer, model_name, reducer_name, db) # <- change signature recommended
+    plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name, db)
+    save_distance(embeddings_2d, labels, reals, model_name, reducer_name, db)
 
 if __name__== "__main__":
 
     device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
-
-    train_filepath = config.PROJECT_ROOT / f'cifake1/train.csv'
-    df_train = pd.read_csv(train_filepath)
-    df_train["filepath"] = df_train["filepath"].str.replace(
-        r'^\.\./\.\./dataset/CIFAKE/',
-        str(config.PROJECT_ROOT) + "/",
-        regex=True
-    )
-
-    class_labels = list(config.label_to_class.values())
-    num_class = len(class_labels)
-    dataset = TransDataset(df_train)
 
     model_specs = [
         ("DINOv2", "facebook/dinov2-small"),
@@ -154,62 +178,44 @@ if __name__== "__main__":
         ("TSNE", lambda: TSNE(n_components=2, perplexity=30, metric="cosine", random_state=42)),
     ]
 
-
-    @torch.no_grad()
-    def extract_embeddings(images, model_name, hf_id, batch_size, num_workers):
-        model_name_upper = model_name.upper()
-        if model_name_upper == "CLIP":
-            processor = CLIPProcessor.from_pretrained(hf_id)
-            model = CLIPModel.from_pretrained(hf_id, use_safetensors=True).to(device).eval()
-        else:
-            processor = AutoImageProcessor.from_pretrained(hf_id, use_fast=True)
-            model = AutoModel.from_pretrained(hf_id).to(device).eval()
-
-        image_embeddings = []
-        for img in tqdm(images):
-            inputs = processor(images=img, return_tensors="pt").to(device)
-            if model_name_upper == "CLIP":
-                feats = model.get_image_features(**inputs)
-            else:
-                outputs = model(**inputs)
-                feats = outputs.last_hidden_state.mean(dim=1)
-            image_embeddings.append(feats.cpu().numpy().flatten())
-
-        return np.array(image_embeddings)
-
-
-    def run_reduction_pipeline(
-            embeddings: np.ndarray,
-            labels: np.ndarray,
-            reals: np.ndarray,
-            model_name: str,
-            reducer_name: str,
-            reducer,
-    ):
-        embeddings_2d = reduce_dim(embeddings, reducer, model_name, reducer_name) # <- change signature recommended
-        plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name)
-        save_distance(embeddings_2d, labels, reals, model_name, reducer_name)
-
-
-    images, labels, reals = [], [], []
-    for i in range(len(dataset)):
-        img, label, real = dataset[i]
-        images.append(img)
-        labels.append(label)
-        reals.append(real)
-
-    labels = np.array(labels)
-    reals = np.array(reals)
-
-    for model_name, hf_id in model_specs:
-        image_embeddings = extract_embeddings(
-            images,
-            model_name=model_name,
-            hf_id=hf_id,
-            batch_size=32,
-            num_workers=2,
+    def compute_distance(train_filepath, db='FAKE1'):
+        df_train = pd.read_csv(train_filepath)
+        df_train["filepath"] = df_train["filepath"].str.replace(
+            r'^\.\./\.\./dataset/CIFAKE/',
+            str(config.PROJECT_ROOT) + "/",
+            regex=True
         )
 
-        for reducer_name, reducer_fn in reducer_specs:
-            reducer = reducer_fn()
-            run_reduction_pipeline(image_embeddings, labels, reals, model_name, reducer_name, reducer)
+        class_labels = list(config.label_to_class.values())
+        dataset = TransDataset(df_train)
+
+        images, labels, reals = [], [], []
+        for i in range(len(dataset)):
+            img, label, real = dataset[i]
+            images.append(img)
+            labels.append(label)
+            reals.append(real)
+
+        labels = np.array(labels)
+        reals = np.array(reals)
+
+        for model_name, hf_id in model_specs:
+            image_embeddings = extract_embeddings(
+                images,
+                model_name=model_name,
+                hf_id=hf_id,
+                batch_size=32,
+                num_workers=2,
+            )
+
+            for reducer_name, reducer_fn in reducer_specs:
+                reducer = reducer_fn()
+                run_reduction_pipeline(df_train, image_embeddings, labels, reals, model_name, reducer_name, reducer, db)
+
+
+    train_filepath = config.PROJECT_ROOT / f'cifake1/train.csv'
+    db = 'FAKE1'
+    compute_distance(train_filepath, db)
+    train_filepath = config.PROJECT_ROOT / f'cifake2/train.csv'
+    db = 'FAKE2'
+    compute_distance(train_filepath, db)
