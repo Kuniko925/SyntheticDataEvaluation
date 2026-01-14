@@ -1,15 +1,16 @@
-from model import MobileNetV2
+from model import MobileNetV2, ResNet50Model, ViT16
 import config
 import torch
 import torch.nn.functional as F
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
 import os
 import data
 from dataclasses import dataclass
 import random
 import numpy as np
+import re
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
 
 seed = 42
 random.seed(seed)
@@ -21,11 +22,7 @@ torch.backends.cudnn.deterministic = True
 torch.use_deterministic_algorithms = True
 os.environ['PYTHONHASHSEED'] = str(seed)
 
-BEST_MODEL_PATH = {
-    'FAKE1': {'MobileNetV2': 49, 'ResNet50': 43, 'ViT16': 46},
-    'FAKE2': {'MobileNetV2': 42, 'ResNet50': 43, 'ViT16': 45},
-    'REAL': {'MobileNetV2': 46, 'ResNet50': 40, 'ViT16': 47}
-}
+
 
 def list_mnv2_layers(model):
     names = []
@@ -38,10 +35,6 @@ def list_mnv2_layers(model):
 
 
 def _to_vector(act: torch.Tensor) -> torch.Tensor:
-    """
-    (N,C,H,W) -> (N,C) にGAP
-    (N,D) ならそのまま
-    """
     if act.dim() == 4:
         return act.mean(dim=(2,3))
     elif act.dim() == 2:
@@ -50,16 +43,12 @@ def _to_vector(act: torch.Tensor) -> torch.Tensor:
         return act.flatten(1)
 
 def forward_collect_acts(model, x, layer_names):
-    """
-    指定した layer_names の出力を dict[name] = (N,dim) ベクトルで返す
-    """
     acts = {}
     name_to_module = dict(model.named_modules())
     hooks = []
 
     def make_hook(name):
         def hook(module, inp, out):
-            # out が tuple の場合があるので対応
             if isinstance(out, (tuple, list)):
                 out_ = out[0]
             else:
@@ -81,29 +70,21 @@ def forward_collect_acts(model, x, layer_names):
     return acts
 
 def compare_layer(A: torch.Tensor, B: torch.Tensor):
-    """
-    A,B: (N, D)
-    return: cosine_mean, l2_mean, rel_l2_mean
-    """
-    # shape確認
     assert A.shape[0] == B.shape[0], (A.shape, B.shape)
 
-    # cosine similarity（サンプルごと）
+    # Cosine similarity
     A_n = F.normalize(A, dim=1)
     B_n = F.normalize(B, dim=1)
     cos = (A_n * B_n).sum(dim=1)  # (N,)
 
-    # L2距離（サンプルごと）
+    # L2 distance
     l2 = (A - B).norm(p=2, dim=1)
 
-    # 相対L2（スケール差を吸収）
+    # Relative L2 distance
     denom = A.norm(p=2, dim=1).clamp_min(1e-8)
     rel = l2 / denom
 
     return cos.mean().item(), l2.mean().item(), rel.mean().item()
-
-
-
 
 
 def compare_models_per_layer(fake_model, real_model, test_loader, layer_names, device):
@@ -184,15 +165,7 @@ def classwise_agreement(model_a, model_b, test_loader, device, num_class):
     return same / np.clip(cnt, 1, None), cnt
 
 def overlap_correctness(model_a, model_b, test_loader, device, num_class=None):
-    """
-    同一テストに対して
-      - both_correct
-      - only_A_correct
-      - only_B_correct
-      - both_wrong
-    の割合と件数を出す。
-    さらに num_class を渡すと、クラス別にも同じ集計を返す。
-    """
+
     model_a.eval().to(device)
     model_b.eval().to(device)
 
@@ -202,7 +175,6 @@ def overlap_correctness(model_a, model_b, test_loader, device, num_class=None):
     both_wrong = 0
     total = 0
 
-    # クラス別（任意）
     if num_class is not None:
         cls_stats = {c: {"both_correct":0, "only_a":0, "only_b":0, "both_wrong":0, "total":0} for c in range(num_class)}
     else:
@@ -294,16 +266,28 @@ if __name__== "__main__":
     #for db, best_model in BEST_MODEL_PATH.items():
     #    for model_name, epochs in best_model.items():
 
-    def compute_structure_difference(db):
-        model_name = 'MobileNetV2'
-        epochs = BEST_MODEL_PATH[db][model_name]
+    def compute_structure_difference(model_name, db):
+
+        epochs = config.BEST_MODEL_PATH[db][model_name]
         best_val_file = config.PROJECT_ROOT / f'{db}/{model_name}/{db}model_{epochs}.pt'
-        fake_model = MobileNetV2(num_class)
+
+        if model_name == "ResNet50":
+            fake_model = ResNet50Model(num_class)
+        elif model_name == "MobileNetV2":
+            fake_model = MobileNetV2(num_class)
+        else:
+            fake_model = ViT16(num_class)
         fake_model.load_state_dict(torch.load(best_val_file, weights_only=True))
 
-        epochs = BEST_MODEL_PATH['REAL'][model_name]
+        epochs = config.BEST_MODEL_PATH['REAL'][model_name]
         best_val_file = config.PROJECT_ROOT / f'REAL/{model_name}/REALmodel_{epochs}.pt'
-        real_model = MobileNetV2(num_class)
+
+        if model_name == "ResNet50":
+            real_model = ResNet50Model(num_class)
+        elif model_name == "MobileNetV2":
+            real_model = MobileNetV2(num_class)
+        else:
+            real_model = ViT16(num_class)
         real_model.load_state_dict(torch.load(best_val_file, weights_only=True))
 
         # to avoid randomness
@@ -334,9 +318,60 @@ if __name__== "__main__":
         print("REALmodel acc on db test_real:", simple_acc(real_model, test_loader_r, device))
 
     DB = ['FAKE1', 'FAKE2']
+    model_name = 'MobileNetV2'
     for db in DB:
-        compute_structure_difference(db)
+        compute_structure_difference(model_name, db)
 
+
+    FAKE1_CSV = "results/mnv2_layer_diff_FAKE1_vs_REAL.csv"
+    FAKE2_CSV = "results/mnv2_layer_diff_FAKE2_vs_REAL.csv"
+
+
+    def add_layer_index(df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+
+        def layer_to_index(name: str) -> int:
+            m = re.search(r"features\.(\d+)$", str(name))
+            if m:
+                return int(m.group(1))
+            if str(name).endswith("classifier"):
+                return 10 ** 9
+            return 10 ** 8
+
+        df["layer_index"] = df["layer"].apply(layer_to_index)
+
+        feat_mask = df["layer"].astype(str).str.contains(r"features\.\d+$", regex=True)
+        if feat_mask.any():
+            max_feat = int(df.loc[feat_mask, "layer_index"].max())
+            df.loc[df["layer"].astype(str).str.endswith("classifier"), "layer_index"] = max_feat + 1
+
+        return df.sort_values("layer_index").reset_index(drop=True)
+
+
+    def load(path: str) -> pd.DataFrame:
+        df = pd.read_csv(path)
+        return add_layer_index(df)
+
+
+    df1 = load(FAKE1_CSV)
+    df2 = load(FAKE2_CSV)
+
+    plt.figure()
+    sc1 = plt.scatter(df1["rel_l2_mean"], df1["cosine_mean"], c=df1["layer_index"],
+                      marker="o", alpha=0.9, label="FAKE1")
+    sc2 = plt.scatter(df2["rel_l2_mean"], df2["cosine_mean"], c=df2["layer_index"],
+                      marker="^", alpha=0.9, label="FAKE2")
+
+    plt.xlabel("l2_mean (lower = closer)")
+    plt.ylabel("cosine_mean (higher = closer)")
+    plt.title(f"{model_name} Layer-wise similarity on REAL")
+    plt.legend()
+
+    cbar = plt.colorbar(sc2)
+    cbar.set_label("layer index (depth)")
+    save_filepath = config.PROJECT_ROOT / f"results/{model_name}_layer_diff_FAKE1_vs_REAL.csv"
+    plt.savefig(save_filepath)
+    plt.close()
 
 
 

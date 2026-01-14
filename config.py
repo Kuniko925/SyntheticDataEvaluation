@@ -8,6 +8,12 @@ CFG = {
     "FAKE2": {"DB": "cifake2", "FileName": "real_real.csv", "ImageDir": "cifake2/train/FAKE"},
 }
 
+BEST_MODEL_PATH = {
+    'FAKE1': {'MobileNetV2': 49, 'ResNet50': 43, 'ViT16': 46},
+    'FAKE2': {'MobileNetV2': 42, 'ResNet50': 43, 'ViT16': 45},
+    'REAL': {'MobileNetV2': 46, 'ResNet50': 40, 'ViT16': 47}
+}
+
 MODELS = ["ResNet50", "MobileNetV2", "ViT16"]
 
 label_to_class = {0: 'airplane',
