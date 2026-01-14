@@ -9,7 +9,6 @@ from dataclasses import dataclass
 import random
 import numpy as np
 import re
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
 seed = 42
