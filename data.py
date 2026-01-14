@@ -88,14 +88,22 @@ def add_image_column(df: pd.DataFrame, filepath_col: str = "filepath", image_col
 def get_dataset(db):
     test_size = 0.2
 
-    save_filepath = config.PROJECT_ROOT / f'{config.CFG[db]["DB"]}/train.csv'
+    if db == "MIX":
+        save_filepath = config.PROJECT_ROOT / f'cifake3/train.csv'
+    else:
+        save_filepath = config.PROJECT_ROOT / f'{config.CFG[db]["DB"]}/train.csv'
+
     df = load_csv_and_fix_filepath(save_filepath, config.PROJECT_ROOT)
     df_real = df[df['rf'] == 'REAL'].copy()
     df_fake = df[df['rf'] == 'FAKE'].copy()
     df_train_r, df_valid_r = train_test_split(df_real, test_size=test_size, random_state=seed, shuffle=True)
     df_train_f, df_valid_f = train_test_split(df_fake, test_size=test_size, random_state=seed, shuffle=True)
 
-    save_filepath = config.PROJECT_ROOT / f'{config.CFG[db]["DB"]}/test.csv'
+    if db == "MIX":
+        save_filepath = config.PROJECT_ROOT / f'cifake3/test.csv'
+    else:
+        save_filepath = config.PROJECT_ROOT / f'{config.CFG[db]["DB"]}/test.csv'
+
     df_test = load_csv_and_fix_filepath(save_filepath, config.PROJECT_ROOT)
     df_test_r = df_test[df_test['rf'] == 'REAL'].copy()
     df_test_f = df_test[df_test['rf'] == 'FAKE'].copy()
