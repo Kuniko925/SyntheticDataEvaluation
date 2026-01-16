@@ -77,9 +77,9 @@ def plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name, d
                 )
                 ax.add_patch(circle)
 
-        ax.set_title(f"{config.label_to_class[i]}")
+        ax.set_title(f"{config.label_to_class[i]}", fontsize=14)
         ax.grid(True)
-        ax.legend(fontsize=10)
+        ax.legend(fontsize=12)
 
     plt.tight_layout()
     plt.savefig(save_filepath)
