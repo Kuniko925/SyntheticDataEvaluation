@@ -54,7 +54,7 @@ if __name__== "__main__":
             ims.append(im)
 
         fig.colorbar(ims[0], ax=axes, shrink=0.85)
-        out_path = config.PROJECT_ROOT / f"results/class_heatmap_{data_type}.pdf"
+        out_path = config.PROJECT_ROOT / f"results/class_heatmap_{data_type}.png"
         fig.savefig(out_path, dpi=300, bbox_inches="tight")
         plt.close(fig)
 
@@ -122,7 +122,7 @@ if __name__== "__main__":
 
     #  Visualise correlation using Heatmap
     for db2 in db2_list:
-        out_path = config.PROJECT_ROOT / "results" / f"corr_ALL_REAL_{db2}_heatmap.pdf"
+        out_path = config.PROJECT_ROOT / "results" / f"corr_ALL_REAL_{db2}_heatmap.png"
         d = corr_all_df.query(f"DB2 == '{db2}'")
 
         mat = d.pivot_table(
