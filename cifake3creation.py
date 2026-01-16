@@ -28,7 +28,12 @@ if __name__== "__main__":
 
     csv_path = config.PROJECT_ROOT / 'cifake3/train.csv'
     df = pd.read_csv(csv_path)
-    df_new = replace_fake6_with_real_as_fake(df, target_label=6)
+    df_new = replace_fake6_with_real_as_fake(df, target_label=0)
+    df_new = replace_fake6_with_real_as_fake(df_new, target_label=3)
+    df_new = replace_fake6_with_real_as_fake(df_new, target_label=4)
+    df_new = replace_fake6_with_real_as_fake(df_new, target_label=5)
+    df_new = replace_fake6_with_real_as_fake(df_new, target_label=6)
+    df_new = replace_fake6_with_real_as_fake(df_new, target_label=7)
 
     csv_path = config.PROJECT_ROOT / 'cifake3/train.csv'
     df_new.to_csv(csv_path, index=False)
