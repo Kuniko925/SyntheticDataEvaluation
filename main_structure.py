@@ -32,6 +32,27 @@ def list_mnv2_layers(model):
     names.append("base_model.classifier")
     return names
 
+def list_resnet50_layers(model):
+    names = []
+    names += [
+        "base_model.conv1",
+        "base_model.bn1",
+        "base_model.relu",
+        "base_model.maxpool",
+    ]
+    for s in range(1, 5):  # layer1..layer4
+        layer = getattr(model.base_model, f"layer{s}")
+        for b in range(len(layer)):
+            names.append(f"base_model.layer{s}.{b}")
+    if hasattr(model.base_model, "avgpool"):
+        names.append("base_model.avgpool")
+    if hasattr(model.base_model, "fc"):
+        names.append("base_model.fc")
+    else:
+        names.append("base_model.classifier")
+
+    return names
+
 
 def _to_vector(act: torch.Tensor) -> torch.Tensor:
     if act.dim() == 4:
@@ -257,100 +278,200 @@ def simple_acc(model, loader, device):
             total += labels.size(0)
     return correct / total
 
-if __name__== "__main__":
+def layer_index_mnv2(name: str) -> int:
+    m = re.search(r"base_model\.features\.(\d+)$", str(name))
+    if m:
+        return int(m.group(1))
+    if str(name).endswith("base_model.classifier") or str(name).endswith("classifier"):
+        return 10**9
+    return 10**8
 
-    num_class = len(config.label_to_class)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def layer_index_resnet(name: str) -> int:
+    name = str(name)
 
-    #for db, best_model in BEST_MODEL_PATH.items():
-    #    for model_name, epochs in best_model.items():
+    # stem: 0-3
+    stem = {
+        "base_model.conv1": 0,
+        "base_model.bn1": 1,
+        "base_model.relu": 2,
+        "base_model.maxpool": 3,
+    }
+    if name in stem:
+        return stem[name]
+    m = re.search(r"base_model\.layer([1-4])\.(\d+)$", name)
+    if m:
+        s = int(m.group(1))
+        b = int(m.group(2))
+        return s * 100 + b
 
-    def compute_structure_difference(model_name, db):
+    # tail
+    if name == "base_model.avgpool":
+        return 900
+    if name in ("base_model.fc", "base_model.classifier"):
+        return 901
+    return 999
 
-        epochs = config.BEST_MODEL_PATH[db][model_name]
-        best_val_file = config.PROJECT_ROOT / f'{db}/{model_name}/{db}model_{epochs}.pt'
 
-        if model_name == "ResNet50":
-            fake_model = ResNet50Model(num_class)
-        elif model_name == "MobileNetV2":
-            fake_model = MobileNetV2(num_class)
-        else:
-            fake_model = ViT16(num_class)
-        fake_model.load_state_dict(torch.load(best_val_file, weights_only=True))
+def list_vit_layers(model):
+    names = ["base_model.conv_proj"]  # patch embed
 
-        epochs = config.BEST_MODEL_PATH['REAL'][model_name]
-        best_val_file = config.PROJECT_ROOT / f'REAL/{model_name}/REALmodel_{epochs}.pt'
+    # encoder blocks: base_model.encoder.layers.encoder_layer_0
+    name_to_module = dict(model.named_modules())
+    idxs = []
+    for k in name_to_module.keys():
+        m = re.match(r"base_model\.encoder\.layers\.encoder_layer_(\d+)$", k)
+        if m:
+            idxs.append(int(m.group(1)))
 
-        if model_name == "ResNet50":
-            real_model = ResNet50Model(num_class)
-        elif model_name == "MobileNetV2":
-            real_model = MobileNetV2(num_class)
-        else:
-            real_model = ViT16(num_class)
-        real_model.load_state_dict(torch.load(best_val_file, weights_only=True))
+    if not idxs:
+        raise KeyError("No ViT encoder layers found (expected base_model.encoder.layers.encoder_layer_i).")
 
-        # to avoid randomness
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+    for i in sorted(idxs):
+        names.append(f"base_model.encoder.layers.encoder_layer_{i}")
 
+    # final norm + head
+    if "base_model.encoder.ln" in name_to_module:
+        names.append("base_model.encoder.ln")
+    names.append("base_model.heads")
+
+    return names
+
+
+def layer_index_vit(name: str) -> int:
+    name = str(name)
+    if name == "base_model.conv_proj":
+        return 0
+
+    m = re.match(r"base_model\.encoder\.layers\.encoder_layer_(\d+)$", name)
+    if m:
+        return 100 + int(m.group(1))
+
+    if name == "base_model.encoder.ln":
+        return 900
+    if name == "base_model.heads":
+        return 901
+    return 999
+
+
+MODEL_REGISTRY = {
+  "MobileNetV2": {
+      "ctor": MobileNetV2,
+      "conf": MobileNetConf(),
+      "list_layers": list_mnv2_layers,
+      "layer_index": layer_index_mnv2,
+  },
+  "ResNet50": {
+      "ctor": ResNet50Model,
+      "conf": ResNetConf(),
+      "list_layers": list_resnet50_layers,
+      "layer_index": layer_index_resnet,
+  },
+  "ViT16": {
+      "ctor": ViT16,
+      "conf": ViT16Conf(),
+      "list_layers": list_vit_layers,
+      "layer_index": layer_index_vit,
+  },
+}
+
+
+def add_layer_index(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    def layer_to_index(name: str) -> int:
+        m = re.search(r"features\.(\d+)$", str(name))
+        if m:
+            return int(m.group(1))
+        if str(name).endswith("classifier"):
+            return 10 ** 9
+        return 10 ** 8
+
+    df["layer_index"] = df["layer"].apply(layer_to_index)
+
+    feat_mask = df["layer"].astype(str).str.contains(r"features\.\d+$", regex=True)
+    if feat_mask.any():
+        max_feat = int(df.loc[feat_mask, "layer_index"].max())
+        df.loc[df["layer"].astype(str).str.endswith("classifier"), "layer_index"] = max_feat + 1
+
+    return df.sort_values("layer_index").reset_index(drop=True)
+
+
+def load(path: str) -> pd.DataFrame:
+    df = pd.read_csv(path)
+    return add_layer_index(df)
+
+def compute_structure_difference(model_name, db):
+
+    epochs = config.BEST_MODEL_PATH[db][model_name]
+    best_val_file = config.PROJECT_ROOT / f'{db}/{model_name}/{db}model_{epochs}.pt'
+
+    if model_name == "ResNet50":
+        fake_model = ResNet50Model(num_class)
+    elif model_name == "MobileNetV2":
+        fake_model = MobileNetV2(num_class)
+    else:
+        fake_model = ViT16(num_class)
+    fake_model.load_state_dict(torch.load(best_val_file, weights_only=True))
+
+    epochs = config.BEST_MODEL_PATH['REAL'][model_name]
+    best_val_file = config.PROJECT_ROOT / f'REAL/{model_name}/REALmodel_{epochs}.pt'
+
+    if model_name == "ResNet50":
+        real_model = ResNet50Model(num_class)
+    elif model_name == "MobileNetV2":
+        real_model = MobileNetV2(num_class)
+    else:
+        real_model = ViT16(num_class)
+    real_model.load_state_dict(torch.load(best_val_file, weights_only=True))
+
+    # to avoid randomness
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    if model_name == "MobileNetV2":
         conf = MobileNetConf()
-        df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f = data.get_dataset(db)
-        train_loader_r, valid_loader_r, test_loader_r, train_loader_f, valid_loader_f, test_loader_f = data.get_dataloaders(
-            df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f, conf.batch_size, conf.img_size)
+    elif model_name == "ResNet50":
+        conf = ResNetConf()
+    elif model_name == "ViT16":
+        conf = ViT16Conf()
+    else:
+        raise ValueError(f"Unknown model_name: {model_name}")
 
+
+    df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f = data.get_dataset(db)
+    train_loader_r, valid_loader_r, test_loader_r, train_loader_f, valid_loader_f, test_loader_f = data.get_dataloaders(
+        df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f, conf.batch_size, conf.img_size)
+
+    if model_name == "MobileNetV2":
         layer_names = list_mnv2_layers(fake_model)
-        df_layer_diff = compare_models_per_layer(fake_model, real_model, test_loader_r, layer_names, device)
+    elif model_name == "ResNet50":
+        layer_names = list_resnet50_layers(fake_model)
+    elif model_name == "ViT16":
+        layer_names = list_vit_layers(fake_model)
+    else:
+        raise ValueError(f"Unknown model_name: {model_name}")
 
-        save_path = config.PROJECT_ROOT / f"results/mnv2_layer_diff_{db}_vs_REAL.csv"
-        df_layer_diff.to_csv(save_path, index=False)
+    df_layer_diff = compare_models_per_layer(fake_model, real_model, test_loader_r, layer_names, device)
 
-
-        agree_c, support = classwise_agreement(fake_model, real_model, test_loader_r, device, num_class)
-        for c, (a, n) in enumerate(zip(agree_c, support)):
-            print(c, a, n)
-
-        summary, df_cls = overlap_correctness(real_model, fake_model, test_loader_r, device, num_class=num_class)
-
-        print(summary)
-        print(df_cls.head(10))
-
-        print("REALmodel acc on db test_real:", simple_acc(real_model, test_loader_r, device))
-
-    DB = ['FAKE1', 'FAKE2']
-    model_name = 'MobileNetV2'
-    for db in DB:
-        compute_structure_difference(model_name, db)
+    save_path = config.PROJECT_ROOT / f"results/{model_name}_layer_diff_{db}_vs_REAL.csv"
+    df_layer_diff.to_csv(save_path, index=False)
 
 
-    FAKE1_CSV = "results/mnv2_layer_diff_FAKE1_vs_REAL.csv"
-    FAKE2_CSV = "results/mnv2_layer_diff_FAKE2_vs_REAL.csv"
+    agree_c, support = classwise_agreement(fake_model, real_model, test_loader_r, device, num_class)
+    for c, (a, n) in enumerate(zip(agree_c, support)):
+        print(c, a, n)
+
+    summary, df_cls = overlap_correctness(real_model, fake_model, test_loader_r, device, num_class=num_class)
+
+    print(summary)
+    print(df_cls.head(10))
+
+    print("REAL model acc on db test_real:", simple_acc(real_model, test_loader_r, device))
 
 
-    def add_layer_index(df: pd.DataFrame) -> pd.DataFrame:
-        df = df.copy()
-
-        def layer_to_index(name: str) -> int:
-            m = re.search(r"features\.(\d+)$", str(name))
-            if m:
-                return int(m.group(1))
-            if str(name).endswith("classifier"):
-                return 10 ** 9
-            return 10 ** 8
-
-        df["layer_index"] = df["layer"].apply(layer_to_index)
-
-        feat_mask = df["layer"].astype(str).str.contains(r"features\.\d+$", regex=True)
-        if feat_mask.any():
-            max_feat = int(df.loc[feat_mask, "layer_index"].max())
-            df.loc[df["layer"].astype(str).str.endswith("classifier"), "layer_index"] = max_feat + 1
-
-        return df.sort_values("layer_index").reset_index(drop=True)
-
-
-    def load(path: str) -> pd.DataFrame:
-        df = pd.read_csv(path)
-        return add_layer_index(df)
-
+def plot_layer_difference(model_name):
+    FAKE1_CSV = f"results/{model_name}_layer_diff_FAKE1_vs_REAL.csv"
+    FAKE2_CSV = f"results/{model_name}_layer_diff_FAKE2_vs_REAL.csv"
 
     df1 = load(FAKE1_CSV)
     df2 = load(FAKE2_CSV)
@@ -368,9 +489,22 @@ if __name__== "__main__":
 
     cbar = plt.colorbar(sc2)
     cbar.set_label("layer index (depth)")
-    save_filepath = config.PROJECT_ROOT / f"results/{model_name}_layer_diff_FAKE1_vs_REAL.csv"
+    save_filepath = config.PROJECT_ROOT / f"results/{model_name}_layer_diff_FAKE1_vs_REAL.png"
     plt.savefig(save_filepath)
     plt.close()
+
+if __name__== "__main__":
+
+    num_class = len(config.label_to_class)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    DB = ['FAKE1', 'FAKE2']
+    model_names = config.MODELS
+    for db in DB:
+        for model_name in model_names:
+            compute_structure_difference(model_name, db)
+            plot_layer_difference(model_name)
+
 
 
 
