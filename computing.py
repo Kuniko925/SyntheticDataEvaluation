@@ -13,16 +13,13 @@ def compute_rgb_joint_entropy(image_path):
     img = Image.open(image_path).convert('RGB')
     img_array = np.array(img)
 
-    # 各チャンネルをフラット化して、(N, 3) の配列に
     pixels = img_array.reshape(-1, 3)
     r = pixels[:, 0]
     g = pixels[:, 1]
     b = pixels[:, 2]
 
-    # 3次元ヒストグラムを計算
     hist, _ = np.histogramdd((r, g, b), bins=(256, 256, 256), range=((0, 256), (0, 256), (0, 256)), density=True)
 
-    # 非ゼロの確率成分だけ取り出してエントロピー計算
     hist_nonzero = hist[hist > 0]
     joint_entropy = -np.sum(hist_nonzero * np.log2(hist_nonzero))
 

@@ -34,42 +34,46 @@ if __name__== "__main__":
     # Plot Confusion Matrix
     for data_type in list(config.CFG.keys()):
 
-        fig, axes = plt.subplots(1, len(models), figsize=(6 * len(models), 6), constrained_layout=True)
+        if data_type == 'FAKE1':
 
-        cms = {}
-        ims = []
-
-        for ax, m in zip(axes, models):
-            csv_path = config.build_res_filepath(data_type, m)
-
-            cm_raw, class_names, im = plotting.plot_confusion_matrix_from_performance(
-                csv_path,
-                config.label_to_class,
-                title=f"{m} Confusion Matrix",
-                normalize=None,
-                ax=ax,
-                add_colorbar=False,
+            fig, axes = plt.subplots(
+                1, len(models),
+                figsize=(5 * len(models), 6),
+                constrained_layout=True,
+                sharey=True,
             )
-            cms[m] = cm_raw
-            ims.append(im)
 
-        fig.colorbar(ims[0], ax=axes, shrink=0.85)
-        out_path = config.PROJECT_ROOT / f"results/class_heatmap_{data_type}.png"
-        fig.savefig(out_path, dpi=300, bbox_inches="tight")
-        plt.close(fig)
+            cms, ims = {}, []
+
+            for i, (ax, m) in enumerate(zip(axes, models)):
+                csv_path = config.build_res_filepath(data_type, m)
+                cm_raw, class_names, im = plotting.plot_confusion_matrix_from_performance(
+                    csv_path,
+                    config.label_to_class,
+                    title=f"{m}",
+                    normalize=None,
+                    ax=ax,
+                    add_colorbar=False,
+                )
+                cms[m] = cm_raw
+                ims.append(im)
+
+                if i != 0:
+                    ax.set_ylabel("")
+                    ax.tick_params(axis="y", left=False, labelleft=False)
+
+            out_path = config.PROJECT_ROOT / f"results/class_heatmap_{data_type}.png"
+            fig.savefig(out_path, dpi=300, bbox_inches="tight")
+            plt.close(fig)
 
 
     # Gpa scatterplot between Color statis and performance
     DB1 = "REAL"
     db2_list = ["FAKE1", "FAKE2"]
     stat_metrics = ["mean", "std", "skew", "kurtosis", "entropy"]
+    targets = [("LAB", "L"), ("HSV", "V"), ("YCRCB", "Y"),]
 
-    targets = [
-        ("LAB", "L"),
-        ("HSV", "S"),
-        ("HSV", "V"),
-        ("YCRCB", "Y"),
-    ]
+    out_dir = config.PROJECT_ROOT / "results"
 
     for color_space, ch in targets:
         color_stats_df = create_dataframe(
@@ -80,21 +84,20 @@ if __name__== "__main__":
             unit="Data"
         )
 
-        out_pdf = config.PROJECT_ROOT / "results" / f"gap_{color_space}_{ch}_{DB1}_FAKE1_FAKE2_by_metric_pages.pdf"
+        for stat_metric in stat_metrics:
+            fig, _ = plotting.make_gap_figure(
+                DB1=DB1,
+                DB2_list=db2_list,
+                color_stats_df=color_stats_df,
+                ch=ch,
+                stat_metric=stat_metric,
+            )
 
-        with PdfPages(out_pdf) as pdf:
-            for stat_metric in stat_metrics:
-                fig, _ = plotting.make_gap_figure(
-                    DB1=DB1,
-                    DB2_list=db2_list,
-                    color_stats_df=color_stats_df,
-                    ch=ch,
-                    stat_metric=stat_metric,
-                )
-                pdf.savefig(fig, bbox_inches="tight")
-                plt.close(fig)
+            out_png = out_dir / f"gap_{color_space}_{ch}_{DB1}_FAKE1_FAKE2_{stat_metric}.png"
+            fig.savefig(out_png, dpi=300, bbox_inches="tight", pad_inches=0.02)
+            plt.close(fig)
 
-        print("saved:", out_pdf)
+            print("saved:", out_png)
 
     # Correlation between Color statistics and performance --> DataFrame
     all_corr = []
@@ -133,6 +136,9 @@ if __name__== "__main__":
 
         fig, ax = plt.subplots(figsize=(16, 5))
         sns.heatmap(mat, annot=True, fmt=".2f", cmap="Blues", vmin=-1, vmax=1, ax=ax)
-        ax.set_title(f"Correlation (Pearson): REAL vs {db2}")
+        ax.set_title(f"Correlation: REAL vs {db2}")
         fig.savefig(out_path, dpi=300, bbox_inches="tight")
         plt.close(fig)
+
+
+

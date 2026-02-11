@@ -4,6 +4,7 @@ import numpy as np
 import config
 from sklearn.metrics import classification_report
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 def add_distance_to_centroid(
     centroids,
@@ -30,41 +31,51 @@ def add_distance_to_centroid(
 
 if __name__== "__main__":
 
+
     model_names = ['CLIP', 'DINOv2', 'DINOv3']
     reducer_names = ['UMAP', 'TSNE']
-
     DB = ['FAKE1', 'FAKE2']
 
-    for db in DB:
-        for model_name in model_names:
-            for reducer_name in reducer_names:
-                # Distance
-                df_distance = add_distance_to_centroid(
-                    centroids= config.PROJECT_ROOT / f"results/dis_{db}_{model_name}_{reducer_name}.csv",
-                    points= config.PROJECT_ROOT / f"results/embed_{db}_{model_name}_{reducer_name}.csv"
-                )
-                df_distance = df_distance[df_distance['rf'] == 'FAKE']
-                df_distance = (
-                    df_distance.groupby("label", as_index=False)["dist_to_centroid"]
-                    .mean()
-                    .rename(columns={"dist_to_centroid": "mean_dist_to_centroid"})
-                )
+    metric_colors = {
+        "precision": "C0",
+        "recall": "C1",
+        "f1-score": "C2",
+    }
 
-                n_models = len(config.MODELS)
-                fig, axes = plt.subplots(
-                    1, n_models,
-                    figsize=(6 * n_models, 5),
-                    sharex=True,
-                    sharey=True
-                )
+    db_alpha = {"FAKE1": 1.0, "FAKE2": 0.35}
 
-                if n_models == 1:
-                    axes = [axes]
+    metric_markers = {"precision": "o", "recall": "^", "f1-score": "s"}
 
-                for i, m in enumerate(config.MODELS):
-                    ax = axes[i]
+    for model_name in model_names:
+        for reducer_name in reducer_names:
 
-                    # Performance
+            n_models = len(config.MODELS)
+            fig, axes = plt.subplots(
+                1, n_models,
+                figsize=(6 * n_models, 5),
+                sharex=True,
+                sharey=True
+            )
+            if n_models == 1:
+                axes = [axes]
+
+            for i, m in enumerate(config.MODELS):
+                ax = axes[i]
+
+                for db in DB:
+                    # --- Distance ---
+                    df_distance = add_distance_to_centroid(
+                        centroids=config.PROJECT_ROOT / f"results/dis_{db}_{model_name}_{reducer_name}.csv",
+                        points=config.PROJECT_ROOT / f"results/embed_{db}_{model_name}_{reducer_name}.csv"
+                    )
+                    df_distance = df_distance[df_distance["rf"] == "FAKE"]
+                    df_distance = (
+                        df_distance.groupby("label", as_index=False)["dist_to_centroid"]
+                        .mean()
+                        .rename(columns={"dist_to_centroid": "mean_dist_to_centroid"})
+                    )
+
+                    # --- Performance ---
                     filepath = config.PROJECT_ROOT / f"results/{m}_{db}_REAL.csv"
                     df_performance = pd.read_csv(filepath)
 
@@ -80,36 +91,57 @@ if __name__== "__main__":
                     df_report_cls = df_report_cls.merge(df_distance, on="label", how="left")
 
                     x = df_report_cls["mean_dist_to_centroid"]
+                    a = db_alpha[db]
 
-                    ax.scatter(x, df_report_cls["precision"], label="precision")
-                    ax.scatter(x, df_report_cls["recall"], label="recall")
-                    ax.scatter(x, df_report_cls["f1-score"], label="f1-score")
-
-                    for _, r in df_report_cls.iterrows():
-                        cls_name = str(config.label_to_class.get(r["label"], r["label"]))
-                        ax.text(
-                            r["mean_dist_to_centroid"],
-                            r["f1-score"],
-                            cls_name,
-                            fontsize=10
+                    for metric in ["precision", "recall", "f1-score"]:
+                        ax.scatter(
+                            x, df_report_cls[metric],
+                            color=metric_colors[metric],
+                            alpha=a,
+                            marker=metric_markers[metric],
+                            edgecolors="none",
+                            s=80
                         )
 
-                    ax.set_title(f"{m}")
-                    ax.set_xlabel("Mean distance to centroid")
-                    if i == 0:
-                        ax.set_ylabel("Performance")
+                    if db == "FAKE1":
+                        for _, r in df_report_cls.iterrows():
+                            cls_name = str(config.label_to_class.get(r["label"], r["label"]))
+                            ax.text(
+                                r["mean_dist_to_centroid"],
+                                r["f1-score"],
+                                cls_name,
+                                fontsize=12
+                            )
 
-                    ax.set_ylim(-0.02, 1.02)
+                ax.set_title(f"{m}", fontsize=16)
+                ax.set_xlabel("Distance from Centroid", fontsize=16)
+                if i == 0:
+                    ax.set_ylabel("Performance", fontsize=16)
+                ax.set_ylim(-0.02, 1.02)
 
-                handles, labels = axes[0].get_legend_handles_labels()
-                fig.legend(handles, labels, loc="upper center", ncol=3)
+            metric_handles = [
+                Line2D([0], [0], marker=metric_markers["precision"], linestyle="None",
+                       markerfacecolor=metric_colors["precision"], markeredgecolor="none", label="precision"),
+                Line2D([0], [0], marker=metric_markers["recall"], linestyle="None",
+                       markerfacecolor=metric_colors["recall"], markeredgecolor="none", label="recall"),
+                Line2D([0], [0], marker=metric_markers["f1-score"], linestyle="None",
+                       markerfacecolor=metric_colors["f1-score"], markeredgecolor="none", label="f1-score"),
+            ]
+            db_handles = [
+                Line2D([0], [0], marker="o", linestyle="None", color="k",
+                       alpha=db_alpha["FAKE1"], label="FAKE1"),
+                Line2D([0], [0], marker="o", linestyle="None", color="k",
+                       alpha=db_alpha["FAKE2"], label="FAKE2"),
+            ]
 
-                fig.suptitle("Performance vs centroid distance", y=1.03)
-                fig.tight_layout()
-
-                save_filepath = config.PROJECT_ROOT / f"results/{db}_{model_name}_{reducer_name}_prec_recall_f1.png"
-                fig.savefig(save_filepath, bbox_inches="tight")
-                plt.close(fig)
-
-
+            fig.tight_layout(rect=[0, 0.06, 1, 1])
+            fig.legend(
+                handles=metric_handles + db_handles,
+                loc="lower center",
+                ncol=5,
+                bbox_to_anchor=(0.5, 0.02),
+            )
+            save_filepath = config.PROJECT_ROOT / f"results/{model_name}_{reducer_name}_prec_recall_f1_FAKE1_FAKE2.png"
+            fig.savefig(save_filepath, bbox_inches="tight")
+            plt.close(fig)
 

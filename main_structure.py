@@ -208,8 +208,8 @@ def overlap_correctness(model_a, model_b, test_loader, device, num_class=None):
             pa = model_a(x).argmax(dim=1)
             pb = model_b(x).argmax(dim=1)
 
-            ca = (pa == y)  # A correct?
-            cb = (pb == y)  # B correct?
+            ca = (pa == y)  # A correct
+            cb = (pb == y)  # B correct
 
             bc = (ca & cb)
             oa = (ca & ~cb)
@@ -461,12 +461,10 @@ def compute_structure_difference(model_name, db):
     for c, (a, n) in enumerate(zip(agree_c, support)):
         print(c, a, n)
 
-    summary, df_cls = overlap_correctness(real_model, fake_model, test_loader_r, device, num_class=num_class)
-
-    print(summary)
-    print(df_cls.head(10))
-
     print("REAL model acc on db test_real:", simple_acc(real_model, test_loader_r, device))
+    summary, df_cls = overlap_correctness(real_model, fake_model, test_loader_r, device, num_class=num_class)
+    return summary, df_cls
+
 
 
 def plot_layer_difference(model_name):
@@ -498,11 +496,15 @@ if __name__== "__main__":
     num_class = len(config.label_to_class)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    summaries = []
+    dfs = []
     DB = ['FAKE1', 'FAKE2']
     model_names = config.MODELS
     for db in DB:
         for model_name in model_names:
-            compute_structure_difference(model_name, db)
+            summary, df_cls = compute_structure_difference(model_name, db)
+            summaries.append(summary)
+            dfs.append(df_cls)
             plot_layer_difference(model_name)
 
 

@@ -77,9 +77,12 @@ def plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name, d
                 )
                 ax.add_patch(circle)
 
-        ax.set_title(f"{config.label_to_class[i]}", fontsize=14)
+        ax.set_title(f"{config.label_to_class[i]}", fontsize=16)
         ax.grid(True)
-        ax.legend(fontsize=12)
+
+    last_ax = axes[len(config.label_to_class) - 1]
+    handles, labels_ = last_ax.get_legend_handles_labels()
+    last_ax.legend(handles, labels_, fontsize=12, loc="best")
 
     plt.tight_layout()
     plt.savefig(save_filepath)
@@ -159,9 +162,55 @@ def run_reduction_pipeline(
         reducer,
         db
 ):
+
     embeddings_2d = reduce_dim(df_train, embeddings, reducer, model_name, reducer_name, db) # <- change signature recommended
     plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name, db)
     save_distance(embeddings_2d, labels, reals, model_name, reducer_name, db)
+
+
+def _l2_normalize(x, axis=1, eps=1e-12):
+    return x / (np.linalg.norm(x, axis=axis, keepdims=True) + eps)
+
+def save_distance_hd(
+    embeddings_hd, labels, reals, model_name, db="FAKE1",
+    metric="cosine", normalize=True
+):
+    results = []
+
+    for i in range(len(config.label_to_class)):
+        r_mask = (labels == i) & (reals == 1)
+        f_mask = (labels == i) & (reals == 0)
+        if r_mask.sum() == 0 or f_mask.sum() == 0:
+            continue
+
+        r = embeddings_hd[r_mask]
+        f = embeddings_hd[f_mask]
+
+        if normalize:
+            r = _l2_normalize(r, axis=1)
+            f = _l2_normalize(f, axis=1)
+
+        r_cent = r.mean(axis=0)
+        f_cent = f.mean(axis=0)
+
+        if normalize:
+            r_cent = r_cent / (np.linalg.norm(r_cent) + 1e-12)
+            f_cent = f_cent / (np.linalg.norm(f_cent) + 1e-12)
+
+        if metric == "cosine":
+            dist = 1 - float(np.dot(r_cent, f_cent))
+        elif metric == "euclidean":
+            dist = float(np.linalg.norm(r_cent - f_cent))
+        else:
+            raise ValueError("metric must be 'euclidean' or 'cosine'")
+
+        results.append({"label": i, "centroid_dist_hd": dist})
+
+    df = pd.DataFrame(results)
+    save_filepath = config.PROJECT_ROOT / f"results/disHD_{db}_{model_name}.csv"
+    df.to_csv(save_filepath, index=False)
+
+
 
 if __name__== "__main__":
 
@@ -208,6 +257,7 @@ if __name__== "__main__":
                 num_workers=2,
             )
 
+            save_distance_hd(image_embeddings, labels, reals, model_name, db=db, metric="cosine")
             for reducer_name, reducer_fn in reducer_specs:
                 reducer = reducer_fn()
                 run_reduction_pipeline(df_train, image_embeddings, labels, reals, model_name, reducer_name, reducer, db)

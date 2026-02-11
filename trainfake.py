@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, Subset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from finetune import CNNModelTrainer, TransModelTrainer
-from lab_analysis import PROJECT_ROOT
+from main_colorspace import PROJECT_ROOT
 from model import ResNet50Model, MobileNetV2, ViT16
 from PIL import Image
 from pathlib import Path
