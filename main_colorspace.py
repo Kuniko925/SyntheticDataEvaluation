@@ -1,18 +1,88 @@
 import pandas as pd
-import colorspace
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 import seaborn as sns
 import config
 import plotting
-import basedata
+import scipy.stats as stats
+from pathlib import Path
+import os
+import cv2
+import numpy as np
+
+def load_color_images(dir_path, colorspace="LAB", ch='L'):
+
+    cvt, ch_to_idx = _CS_MAP[colorspace]
+    idx = ch_to_idx[ch]
+    data = []
+    cls = Path(dir_path).name
+
+    for filename in os.listdir(dir_path):
+        img_path = os.path.join(dir_path, filename)
+        img = cv2.imread(img_path)
+        if img is None:
+            continue
+        cimg = cv2.cvtColor(img, cvt)
+
+        data.append({
+            "class": cls,
+            "ch": ch,
+            ch: cimg[:, :, idx].astype(np.float32),
+        })
+
+    return data
+
+_CS_MAP = {
+    "LAB":   (cv2.COLOR_BGR2LAB,   {"L": 0, "A": 1, "B": 2}),
+    "HSV":   (cv2.COLOR_BGR2HSV,   {"H": 0, "S": 1, "V": 2}),
+    "YCRCB": (cv2.COLOR_BGR2YCrCb, {"Y": 0, "CR": 1, "CB": 2}),
+}
+
+def get_channel_class_stats(dir_path, color_space, ch):
+    data = load_color_images(dir_path, colorspace=color_space, ch=ch)
+    c_data = np.concatenate([d[ch].ravel() for d in data])
+    bins = np.linspace(0, 1, 256)
+    hist_range = (bins[0], bins[-1])
+    hist, _ = np.histogram(c_data, bins=bins, range=hist_range)
+    hist = hist.astype(float)
+    pdf = hist / hist.sum() if hist.sum() else hist
+    return {
+        "mean": c_data.mean(),
+        "std": c_data.std(),
+        "skew": stats.skew(c_data),
+        "kurtosis": stats.kurtosis(c_data),
+        "entropy": stats.entropy(pdf),
+    }
+
+
+def get_channel_stats(dir_path, color_space='LAB', ch='L'):
+    cvt, keys = _CS_MAP[color_space]
+    cidx = keys.index(ch)
+
+    data = []
+    for filename in os.listdir(dir_path):
+        img_path = os.path.join(dir_path, filename)
+        img_bgr = cv2.imread(img_path)
+        img_cvt = cv2.cvtColor(img_bgr, cvt)
+        C = img_cvt[:, :, cidx]
+        pixels = C.ravel()
+
+        hist = np.bincount(pixels, minlength=256).astype(float)
+        pdf = hist / hist.sum()
+        data.append({
+                "mean": pixels.mean(),
+                "std": pixels.std(),
+                "skew": stats.skew(pixels),
+                "entropy": stats.entropy(pdf),
+            })
+    return data
+
 
 def create_dataframe(image_dir, class_names, color_space, ch, unit='Image'):
     all_rows = []
     for k, v in image_dir.items():
         for cls in class_names:
             datapath = config.PROJECT_ROOT / v['ImageDir'] / cls
-            s_values = colorspace.get_channel_stats(datapath) if unit == "Image" else colorspace.get_channel_class_stats(datapath, color_space, ch)
+            s_values = get_channel_stats(datapath) if unit == "Image" else get_channel_class_stats(datapath, color_space, ch)
 
             if isinstance(s_values, dict):
                 df_cls = pd.DataFrame([s_values])
@@ -84,20 +154,19 @@ if __name__== "__main__":
             unit="Data"
         )
 
-        for stat_metric in stat_metrics:
-            fig, _ = plotting.make_gap_figure(
-                DB1=DB1,
-                DB2_list=db2_list,
-                color_stats_df=color_stats_df,
-                ch=ch,
-                stat_metric=stat_metric,
-            )
+        fig, _ = plotting.make_gap_figure(
+            DB1=DB1,
+            DB2_list=db2_list,
+            color_stats_df=color_stats_df,
+            ch=ch,
+            metric_key = 'F1_diff',
+            stat_metrics=stat_metrics,
+        )
 
-            out_png = out_dir / f"gap_{color_space}_{ch}_{DB1}_FAKE1_FAKE2_{stat_metric}.png"
-            fig.savefig(out_png, dpi=300, bbox_inches="tight", pad_inches=0.02)
-            plt.close(fig)
-
-            print("saved:", out_png)
+        out_png = out_dir / f"gap_{ch}_F1_diff_FAKE1_FAKE2.png"
+        fig.savefig(out_png, dpi=300, bbox_inches="tight", pad_inches=0.02)
+        plt.close(fig)
+        print("saved:", out_png)
 
     # Correlation between Color statistics and performance --> DataFrame
     all_corr = []
@@ -125,7 +194,6 @@ if __name__== "__main__":
 
     #  Visualise correlation using Heatmap
     for db2 in db2_list:
-        out_path = config.PROJECT_ROOT / "results" / f"corr_ALL_REAL_{db2}_heatmap.png"
         d = corr_all_df.query(f"DB2 == '{db2}'")
 
         mat = d.pivot_table(
@@ -134,11 +202,8 @@ if __name__== "__main__":
             values="pearson_r"
         ).sort_index(axis=1)
 
-        fig, ax = plt.subplots(figsize=(16, 5))
-        sns.heatmap(mat, annot=True, fmt=".2f", cmap="Blues", vmin=-1, vmax=1, ax=ax)
-        ax.set_title(f"Correlation: REAL vs {db2}")
-        fig.savefig(out_path, dpi=300, bbox_inches="tight")
-        plt.close(fig)
-
+        out_csv = config.PROJECT_ROOT / "results" / f"corr_ALL_REAL_{db2}_heatmap.csv"
+        mat.to_csv(out_csv, index=True)
+        print("saved:", out_csv)
 
 

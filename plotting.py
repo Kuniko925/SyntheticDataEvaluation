@@ -56,57 +56,30 @@ def plot_confusion_matrix_from_performance(
 
     return cm, class_names, im
 
+
 def make_gap_figure(
     DB1: str,
     DB2_list: list[str],
     color_stats_df,
     ch: str,
-    stat_metric: str,
+    metric_key: str,          # "Precision_diff" / "Recall_diff" / "F1_diff"
+    stat_metrics: list[str],  # ["mean","std","skew","kurtosis","entropy"]
+    nrows: int = 2,
+    ncols: int = 3,
+    annot_model: str | None = "MobileNetV2",
 ):
-    dfs = []
-    for DB2 in DB2_list:
-        color_diff_df = basedata.get_statistical_color_diff(
-            color_stats_df,
-            stat_metric=stat_metric,
-            db_a=DB1,
-            db_b=DB2
-        )
-        perf_diff_df = basedata.get_performance_diff(DB1, DB2)
-        df = perf_diff_df.merge(color_diff_df, on="class_name", how="left")
-        df["DB2"] = DB2
-        dfs.append(df)
+    cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    stat_metric_colors = {sm: cycle[i % len(cycle)] for i, sm in enumerate(stat_metrics)}
 
-    plot_df = pd.concat(dfs, ignore_index=True)
+    perf_map = {DB2: basedata.get_performance_diff(DB1, DB2) for DB2 in DB2_list}
 
-    required_cols = {"class_name", "model", "color_diff", "Precision_diff", "Recall_diff", "F1_diff", "DB2"}
-    missing = required_cols - set(plot_df.columns)
-    if missing:
-        raise ValueError(f"plot_df is missing required columns: {missing}")
+    fig, axes = plt.subplots(nrows, ncols, figsize=(6.2 * ncols, 4.5 * nrows), sharey=True)
+    axes = np.array(axes).reshape(-1)
 
-    metrics = ["Precision_diff", "Recall_diff", "F1_diff"]
-    metric_labels = {"Precision_diff": "Precision", "Recall_diff": "Recall", "F1_diff": "F1"}
-    metric_colors = {"Precision_diff": "tab:blue", "Recall_diff": "tab:orange", "F1_diff": "tab:green"}
-
-    plot_df = plot_df.dropna(subset=["color_diff"] + metrics)
-
-    models_order = list(plot_df["model"].unique())
+    tmp_models = pd.concat([perf_map[db2][["model"]] for db2 in DB2_list], ignore_index=True)["model"].unique()
+    models_order = list(tmp_models)
     marker_cycle = ["o", "^", "s", "D", "P", "X"]
     model_markers = {m: marker_cycle[i % len(marker_cycle)] for i, m in enumerate(models_order)}
-
-    x = plot_df["color_diff"].to_numpy()
-    y_all = np.concatenate([plot_df[m].to_numpy() for m in metrics])
-
-    xpad = (x.max() - x.min()) * 0.05 if x.max() > x.min() else 1.0
-    ypad = (y_all.max() - y_all.min()) * 0.05 if y_all.max() > y_all.min() else 0.01
-    xlim = (x.min() - xpad, x.max() + xpad)
-    ylim = (y_all.min() - ypad, y_all.max() + ypad)
-
-    nrows = 1
-    ncols = len(metrics)
-    fig, axes = plt.subplots(nrows, ncols, figsize=(6 * ncols, 4.8), sharex=True, sharey=True)
-
-    if ncols == 1:
-        axes = np.array([axes])
 
     db2_alpha = {DB2_list[0]: 0.90}
     if len(DB2_list) > 1:
@@ -114,59 +87,81 @@ def make_gap_figure(
     for db2 in DB2_list[2:]:
         db2_alpha[db2] = 0.60
 
-    db2_edge = {}
-    for i, db2 in enumerate(DB2_list):
-        db2_edge[db2] = ("black" if i == 0 else "none")
-    db2_lw = {}
-    for i, db2 in enumerate(DB2_list):
-        db2_lw[db2] = (0.5 if i == 0 else 0.0)
+    db2_edge = {db2: ("black" if i == 0 else "none") for i, db2 in enumerate(DB2_list)}
+    db2_lw   = {db2: (0.5 if i == 0 else 0.0) for i, db2 in enumerate(DB2_list)}
 
-    annot_model = "MobileNetV2"
-    for c, met in enumerate(metrics):
-        ax = axes[c]
+    y_vals = []
+    x_vals = []
+    plot_dfs = {}
+    for stat_metric in stat_metrics:
+        dfs = []
+        for DB2 in DB2_list:
+            color_diff_df = basedata.get_statistical_color_diff(
+                color_stats_df,
+                stat_metric=stat_metric,
+                db_a=DB1,
+                db_b=DB2
+            )
+            df = perf_map[DB2].merge(color_diff_df, on="class_name", how="left")
+            df["DB2"] = DB2
+            dfs.append(df)
+
+        plot_df = pd.concat(dfs, ignore_index=True)
+        plot_df = plot_df.dropna(subset=["color_diff", metric_key])
+        plot_dfs[stat_metric] = plot_df
+
+        x_vals.append(plot_df["color_diff"].to_numpy())
+        y_vals.append(plot_df[metric_key].to_numpy())
+
+    y_all = np.concatenate(y_vals) if len(y_vals) else np.array([0, 1], dtype=float)
+    ypad = (y_all.max() - y_all.min()) * 0.05 if y_all.max() > y_all.min() else 0.01
+    ylim = (y_all.min() - ypad, y_all.max() + ypad)
+
+    for i, stat_metric in enumerate(stat_metrics):
+        ax = axes[i]
+        plot_df = plot_dfs[stat_metric]
+
+        x = plot_df["color_diff"].to_numpy()
+        xpad = (x.max() - x.min()) * 0.05 if x.max() > x.min() else 1.0
+        xlim = (x.min() - xpad, x.max() + xpad)
 
         for DB2 in DB2_list:
             g_db = plot_df[plot_df["DB2"] == DB2]
-
             for model, g_m in g_db.groupby("model"):
                 ax.scatter(
-                    g_m["color_diff"], g_m[met],
-                    color=metric_colors[met],
-                    marker=model_markers[model],
-                    s=55,
+                    g_m["color_diff"], g_m[metric_key],
+                    color=stat_metric_colors[stat_metric],
+                    marker=model_markers.get(model, "o"),
+                    s=60,
                     alpha=db2_alpha.get(DB2, 0.8),
                     edgecolors=db2_edge.get(DB2, "none"),
                     linewidths=db2_lw.get(DB2, 0.0),
                 )
 
-                if model == annot_model:
+                if annot_model is not None and model == annot_model:
                     for _, row in g_m.iterrows():
                         ax.annotate(
                             str(row["class_name"]),
-                            (row["color_diff"], row[met]),
+                            (row["color_diff"], row[metric_key]),
                             textcoords="offset points", xytext=(4, 3),
-                            fontsize=7,
+                            fontsize=12,
                             alpha=db2_alpha.get(DB2, 0.8),
                         )
 
+        ax.set_title(stat_metric, fontsize=14)
         ax.set_xlim(*xlim)
         ax.set_ylim(*ylim)
         ax.grid(alpha=0.2)
-        ax.set_title(metric_labels[met], fontsize=14)
+        if i % ncols == 0:
+            ax.set_ylabel(f'{metric_key}', fontsize=14)
 
-        if c == 0:
-            ax.set_ylabel("Performance", fontsize=14)
+    for j in range(len(stat_metrics), nrows * ncols):
+        axes[j].axis("off")
 
-    metric_handles = [
-        Line2D([0], [0], marker="o", linestyle="",
-               markerfacecolor=metric_colors[m], markeredgecolor="black",
-               markersize=8, label=metric_labels[m])
-        for m in metrics
-    ]
     model_handles = [
         Line2D([0], [0], marker=model_markers[m], linestyle="",
                markerfacecolor="gray", markeredgecolor="black",
-               markersize=8, label=m)
+               markersize=10, label=m)
         for m in models_order
     ]
     db2_handles = [
@@ -178,18 +173,15 @@ def make_gap_figure(
         for db2 in DB2_list
     ]
 
-    all_handles = metric_handles + model_handles + db2_handles
+    all_handles = model_handles + db2_handles
     fig.legend(
         handles=all_handles,
-        loc="center left",
-        bbox_to_anchor=(0.88, 0.5),
-        ncol=1,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.02),
+        ncol=5,
         frameon=False,
     )
-    fig.subplots_adjust(right=0.84, top=0.86)
-    fig.suptitle(f"{ch}-{stat_metric}", y=1.16, fontsize=13)
-    return fig, plot_df
-
+    return fig, plot_dfs
 
 def build_plot_df(DB1, DB2_list, color_stats_df, stat_metric, *, ch, color_space):
     dfs = []

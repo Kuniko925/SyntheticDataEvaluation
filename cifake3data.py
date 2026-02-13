@@ -8,7 +8,7 @@ from model import ResNet50Model, MobileNetV2, ViT16
 import torch
 import config
 import time
-from dataclasses import dataclass
+import train_settings
 
 
 # to reproduce
@@ -60,31 +60,16 @@ def run_training(model_class, conf, db):
     testing(conf.model_name, db, 'REAL', trainer, model, test_loader_r, df_test_r)
     testing(conf.model_name, db, 'FAKE', trainer, model, test_loader_f, df_test_f)
 
-@dataclass
-class TrainConf:
-    model_name: str
-    lr: float
-    batch_size: int
-    img_size: tuple[int, int]
-    num_epochs: int
 
-def ResNetConf():
-    return TrainConf("ResNet50", 1e-2, 32, (32, 32), 50)
-
-def MobileNetConf():
-    return TrainConf("MobileNetV2", 1e-2, 32, (32, 32), 50)
-
-def ViT16Conf():
-    return TrainConf("ViT16", 1e-5, 64, (224, 224), 50)
 
 if __name__== "__main__":
 
     starttime = time.time()
 
     db = 'MIX'
-    run_training(MobileNetV2, MobileNetConf(), db)
-    run_training(ResNet50Model, ResNetConf(), db)
-    run_training(ViT16, ViT16Conf(), db)
+    run_training(MobileNetV2, train_settings.MobileNetConf(), db)
+    run_training(ResNet50Model, train_settings.ResNetConf(), db)
+    run_training(ViT16, train_settings.ViT16Conf(), db)
 
     endtime = time.time()
     interval = endtime - starttime

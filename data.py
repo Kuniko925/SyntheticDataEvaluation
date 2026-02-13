@@ -66,9 +66,10 @@ def get_dataloader(df, img_size, batch_size, label_encoder, train=False): # Trai
                 ])
     else:
         transform = transforms.Compose([transforms.Resize(img_size), transforms.ToTensor(),])
-    
+
+    drop_last = True if train else False
     dataset = TransDataset(df, transform=transform)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=train, num_workers=4, pin_memory=True)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=train, num_workers=4, pin_memory=True, drop_last=drop_last)
     return loader
 
 def load_csv_and_fix_filepath(csv_path: str, project_root) -> pd.DataFrame:

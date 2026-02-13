@@ -86,7 +86,7 @@ class BaseTrainer(ABC):
 
             if best_f1 is None or best_f1 < val_f1:
                 best_f1 = val_f1
-                best_val_file = f"{model_save_directory}model_{epoch}.pt"
+                best_val_file = Path(model_save_directory) / f"model_{epoch}.pt"
                 torch.save(model.state_dict(), best_val_file)
 
             if cnn: scheduler.step(val_f1)
