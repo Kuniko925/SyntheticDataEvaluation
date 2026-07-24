@@ -68,7 +68,7 @@ class BaseTrainer(ABC):
         classification_report(labels, preds, output_dict=True)
         return preds
         
-    def training_loop(self, model, criterion, optimizer, scheduler, train_loader, valid_loader, epochs, model_save_directory):
+    def training_loop(self, model, criterion, optimizer, scheduler, train_loader, valid_loader, epochs, model_save_path, saving_epochs):
         cnn = True
         if model.__class__.__name__ == 'ViT16': cnn = False
 
@@ -84,33 +84,34 @@ class BaseTrainer(ABC):
             val_loss, val_acc, val_f1, _, _ = test(model, criterion, valid_loader)
             print(f'Epoch: {epoch} | Train Acc {train_acc:.4f} | Train Loss {train_loss:.4f} | Val Acc: {val_acc:.4f} | Loss: {val_loss:.4f} | F1: {val_f1:.4f}')
 
-            if best_f1 is None or best_f1 < val_f1:
-                best_f1 = val_f1
-                best_val_file = Path(model_save_directory) / f"model_{epoch}.pt"
-                torch.save(model.state_dict(), best_val_file)
+
+            if saving_epochs is None:
+                if best_f1 is None or best_f1 < val_f1:
+                    best_f1 = val_f1
+                    best_val_file = Path(f"{model_save_path}_best.pt")
+                    torch.save(model.state_dict(), best_val_file)
 
             if cnn: scheduler.step(val_f1)
 
-        torch.save(model.state_dict(), Path(model_save_directory) / f"model_{epochs-1}.pt")
         print(best_val_file)
         return best_val_file
             
 
 class CNNModelTrainer(BaseTrainer):
-    def fit(self, model, train_loader, valid_loader, model_save_directory, epochs=200, lr=1e-5, plot=False):
+    def fit(self, model, train_loader, valid_loader, model_save_directory, epochs=200, lr=1e-5, plot=False, saving_epochs=None):
         
         model.to(device)
-        g_train_loss, g_train_acc, g_train_f1, g_val_loss, g_val_acc, g_val_f1, best_val_file, best_f1 = [], [], [], [], [], [], None, None
+        #g_train_loss, g_train_acc, g_train_f1, g_val_loss, g_val_acc, g_val_f1, best_val_file, best_f1 = [], [], [], [], [], [], None, None
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=lr, weight_decay=1e-5, momentum=0.9, nesterov=True)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.3, patience=5)
 
         return self.training_loop(
-            model, criterion, optimizer, scheduler, train_loader, valid_loader, epochs, model_save_directory)
+            model, criterion, optimizer, scheduler, train_loader, valid_loader, epochs, model_save_directory, saving_epochs=saving_epochs)
 
 
 class TransModelTrainer(BaseTrainer):
-    def fit(self, model, train_loader, valid_loader, model_save_directory, epochs=100, lr=1e-5, patience=30):
+    def fit(self, model, train_loader, valid_loader, model_save_directory, epochs=100, lr=1e-5, patience=30, saving_epochs=None):
         
         model.to(device)
         criterion = nn.CrossEntropyLoss()
@@ -125,4 +126,4 @@ class TransModelTrainer(BaseTrainer):
         scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps)
     
         return self.training_loop(
-            model, criterion, optimizer, scheduler, train_loader, valid_loader, epochs, model_save_directory)
+            model, criterion, optimizer, scheduler, train_loader, valid_loader, epochs, model_save_directory, saving_epochs=saving_epochs)

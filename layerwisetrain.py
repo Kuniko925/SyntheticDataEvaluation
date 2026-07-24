@@ -40,24 +40,32 @@ MODEL_REGISTRY = {
       "ctor": MobileNetV2,
       "conf": train_settings.MobileNetConf(),
       "FAKE1_best": "FAKE1/MobileNetV2/FAKE1model_49.pt",
+      'freeze': 3,
   },
   "ResNet50": {
       "ctor": ResNet50Model,
       "conf": train_settings.ResNetConf(),
       "FAKE1_best": "FAKE1/ResNet50Model/FAKE1model_43.pt",
+      'freeze': 8,
   },
   "ViT16": {
       "ctor": ViT16,
       "conf": train_settings.ViT16Conf(),
       "FAKE1_best": "FAKE1/ViT16/FAKE1model_46.pt",
+      'freeze': 5,
   },
 }
 
 
-def stratified_sample(df, label_col="label", frac=0.20, random_state=seed):
-    return (df.groupby(label_col, group_keys=False)
-            .apply(lambda x: x.sample(frac=frac, random_state=random_state))
-            .reset_index(drop=True))
+def stratified_sample(df, label_col="label", frac=0.10, random_state=seed):
+    return df.groupby(label_col, group_keys=False).sample(frac=frac, random_state=random_state).reset_index(drop=True)
+
+def preparation(model_name, real_raito):
+    # Preparation
+    model_save_directory = config.PROJECT_ROOT / f"Layerwise/{model_name}/" # e.g., layerwise/MobileNet/10/
+    utils.create_directory(model_save_directory)
+    utils.delete_subfolders(model_save_directory)
+    return model_save_directory
 
 def finetune_layerwise(model_name, real_raito=0.1):
 
@@ -69,21 +77,10 @@ def finetune_layerwise(model_name, real_raito=0.1):
     # Data
     df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f = data.get_dataset('FAKE1')
     df_train_r_sub = stratified_sample(df_train_r, label_col="label", frac=real_raito)
+    df_valid_r_sub = stratified_sample(df_valid_r, label_col="label", frac=real_raito)
 
-    train_loader_r_sub, valid_loader_r, test_loader_r, train_loader_f, valid_loader_f, test_loader_f = data.get_dataloaders(
-        df_train_r_sub, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f, conf.batch_size, conf.img_size)
-
-    def preparation(model_name, real_raito):
-        # Preparation
-        model_save_directory = config.PROJECT_ROOT / f"Layerwise/{model_name}/{str(real_raito*100)}/" # e.g., layerwise/MobileNet/10/
-        utils.create_directory(model_save_directory)
-        utils.delete_subfolders(model_save_directory)
-        return model_save_directory
-
-    def testing(model_name, test_setting, trainer, model, test_loader, df_test):
-        preds = trainer.evaluate(model, test_loader)
-        df_test['preds'] = preds
-        df_test.to_csv(config.PROJECT_ROOT / f'results/{model_name}_layerwise_{str(real_raito*100)}_{test_setting}.csv', index=False) # e.g., results/MobileNet_FAKE_REAL.csv/
+    train_loader, valid_loader, test_loader_r, _, _, _ = data.get_dataloaders(
+        df_train_r_sub, df_valid_r_sub, df_test_r, df_train_f, df_valid_f, df_test_f, conf.batch_size, conf.img_size)
 
     # Training Preparation
     model_save_directory = preparation(model_name, real_raito)
@@ -95,15 +92,15 @@ def finetune_layerwise(model_name, real_raito=0.1):
     set_layerwise_modeling(model, freeze_until=3, freeze_bn=True)
 
     trainer = TransModelTrainer() if conf.model_name == 'ViT16' else CNNModelTrainer()
-    best_val_file = trainer.fit(model, train_loader_r_sub, valid_loader_f, model_save_directory, epochs=conf.num_epochs, lr=conf.lr)
+    best_val_file = trainer.fit(model, train_loader, valid_loader, model_save_directory, epochs=conf.num_epochs, lr=conf.lr)
 
     # Load best model
     model = model_class(num_class)
     model.load_state_dict(torch.load(best_val_file, weights_only=False))
 
     # Test
-    testing(model_name, 'REAL', trainer, model, test_loader_r, df_test_r)
-    testing(model_name, 'FAKE', trainer, model, test_loader_f, df_test_f)
+    df_test_r['preds'] = trainer.evaluate(model, test_loader_r)
+    df_test_r.to_csv(config.PROJECT_ROOT / f'results/{model_name}_layerwise.csv', index=False)
 
 
 if __name__== "__main__":

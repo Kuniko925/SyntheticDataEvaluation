@@ -1,27 +1,12 @@
-import os
-import random
-import numpy as np
 import data
 import utils
+from train_utils import set_seed
 from finetune import CNNModelTrainer, TransModelTrainer
 from model import ResNet50Model, MobileNetV2, ViT16
 import torch
 import config
 import time
 import train_settings
-
-
-# to reproduce
-seed = 42
-random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
-torch.cuda.manual_seed(seed)
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.deterministic = True
-torch.use_deterministic_algorithms = True
-os.environ['PYTHONHASHSEED'] = str(seed)
-
 
 def run_training(model_class, conf, db):
 
@@ -60,10 +45,9 @@ def run_training(model_class, conf, db):
     testing(conf.model_name, db, 'REAL', trainer, model, test_loader_r, df_test_r)
     testing(conf.model_name, db, 'FAKE', trainer, model, test_loader_f, df_test_f)
 
-
-
 if __name__== "__main__":
 
+    set_seed(42)
     starttime = time.time()
 
     db = 'MIX'

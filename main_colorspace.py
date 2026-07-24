@@ -104,37 +104,35 @@ if __name__== "__main__":
     # Plot Confusion Matrix
     for data_type in list(config.CFG.keys()):
 
-        if data_type == 'FAKE1':
+        fig, axes = plt.subplots(
+            1, len(models),
+            figsize=(5 * len(models), 6),
+            constrained_layout=True,
+            sharey=True,
+        )
 
-            fig, axes = plt.subplots(
-                1, len(models),
-                figsize=(5 * len(models), 6),
-                constrained_layout=True,
-                sharey=True,
+        cms, ims = {}, []
+
+        for i, (ax, m) in enumerate(zip(axes, models)):
+            csv_path = config.build_res_filepath(data_type, m)
+            cm_raw, class_names, im = plotting.plot_confusion_matrix_from_performance(
+                csv_path,
+                config.label_to_class,
+                title=f"{m}",
+                normalize=None,
+                ax=ax,
+                add_colorbar=False,
             )
+            cms[m] = cm_raw
+            ims.append(im)
 
-            cms, ims = {}, []
+            if i != 0:
+                ax.set_ylabel("")
+                ax.tick_params(axis="y", left=False, labelleft=False)
 
-            for i, (ax, m) in enumerate(zip(axes, models)):
-                csv_path = config.build_res_filepath(data_type, m)
-                cm_raw, class_names, im = plotting.plot_confusion_matrix_from_performance(
-                    csv_path,
-                    config.label_to_class,
-                    title=f"{m}",
-                    normalize=None,
-                    ax=ax,
-                    add_colorbar=False,
-                )
-                cms[m] = cm_raw
-                ims.append(im)
-
-                if i != 0:
-                    ax.set_ylabel("")
-                    ax.tick_params(axis="y", left=False, labelleft=False)
-
-            out_path = config.PROJECT_ROOT / f"results/class_heatmap_{data_type}.png"
-            fig.savefig(out_path, dpi=300, bbox_inches="tight")
-            plt.close(fig)
+        out_path = config.PROJECT_ROOT / f"results/class_heatmap_{data_type}.png"
+        fig.savefig(out_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
 
 
     # Gpa scatterplot between Color statis and performance

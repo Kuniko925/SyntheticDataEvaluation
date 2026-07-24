@@ -118,8 +118,8 @@ if __name__== "__main__":
     ]
 
     db_label_map = {
-        "FAKE1": "GEN1",
-        "FAKE2": "GEN2",
+        "FAKE1": "CIFAKE1",
+        "FAKE2": "CIFAKE2",
         "REAL": "REAL",
     }
 

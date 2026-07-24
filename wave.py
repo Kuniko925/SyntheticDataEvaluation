@@ -77,10 +77,7 @@ def draw_overlay(img, cx, cy, r, ring_width):
 
 
 def propose_centers_from_edges(edges, max_centers=40, grid=16):
-    """
-    エッジ密度が高い領域を粗いグリッドで探し、そのセル中心を候補中心にする。
-    円が無くても使える。
-    """
+
     ys, xs = np.where(edges > 0)
     if len(xs) == 0:
         return []

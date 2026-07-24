@@ -130,3 +130,12 @@ def get_dataloaders(df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, d
     test_loader_f = get_dataloader(df_test_f, img_size, batch_size, label_encoder, train=False)
 
     return train_loader_r, valid_loader_r, test_loader_r, train_loader_f, valid_loader_f, test_loader_f
+
+def stratified_sample(df, label_col="label", frac=0.20, random_state=seed):
+    return df.groupby(label_col, group_keys=False).sample(frac=frac, random_state=random_state).reset_index(drop=True)
+
+def make_subset(real_ratio):
+    df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f = get_dataset('FAKE1')
+    df_train_r_sub = stratified_sample(df_train_r, label_col="label", frac=real_ratio)
+    df_train_f_sub = stratified_sample(df_train_f, label_col="label", frac=(1-real_ratio))
+    return pd.concat([df_train_r_sub, df_train_f_sub], ignore_index=True)

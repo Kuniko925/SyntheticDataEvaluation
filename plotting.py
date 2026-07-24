@@ -6,56 +6,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def plot_confusion_matrix_from_performance(
-    csv_path, label_to_class, title="", normalize=None, ax=None, add_colorbar=False):
-    df = pd.read_csv(csv_path)
-    y_true = df["label"].to_numpy()
-    y_pred = df["preds"].to_numpy()
-
-    labels = sorted(label_to_class.keys())
-    class_names = [label_to_class[i] for i in labels]
-
-    cm = confusion_matrix(y_true, y_pred, labels=labels, normalize=normalize)
-
-    created_fig = False
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(8, 8))
-        created_fig = True
-    else:
-        fig = ax.figure
-
-    im = ax.imshow(cm, interpolation="nearest", cmap="Blues")
-
-    if add_colorbar:
-        fig.colorbar(im, ax=ax)
-
-    ax.set(
-        title=title,
-        xlabel="Predicted label",
-        ylabel="True label",
-        xticks=np.arange(len(class_names)),
-        yticks=np.arange(len(class_names)),
-        xticklabels=class_names,
-        yticklabels=class_names,
-    )
-    plt.setp(ax.get_xticklabels(), rotation=90, ha="right")
-
-    fmt = ".2f" if normalize else "d"
-    thresh = np.nanmax(cm) * 0.6 if np.size(cm) else 0
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            ax.text(
-                j, i, format(cm[i, j], fmt),
-                ha="center", va="center",
-                color="white" if cm[i, j] > thresh else "black",
-                fontsize=14
-            )
-
-    if created_fig:
-        fig.tight_layout()
-
-    return cm, class_names, im
-
 
 def make_gap_figure(
     DB1: str,

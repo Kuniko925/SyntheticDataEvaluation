@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-@dataclass
+
+@dataclass(frozen=True)
 class TrainConf:
     model_name: str
     lr: float
@@ -8,11 +9,30 @@ class TrainConf:
     img_size: tuple[int, int]
     num_epochs: int
 
-def ResNetConf():
-    return TrainConf("ResNet50", 1e-2, 32, (32, 32), 50)
+def ResNetConf() -> TrainConf:
+    return TrainConf(
+        model_name="ResNet50",
+        lr=1e-2,
+        batch_size=32,
+        img_size=(32, 32),
+        num_epochs=50,
+    )
 
-def MobileNetConf():
-    return TrainConf("MobileNetV2", 1e-2, 32, (32, 32), 50)
 
-def ViT16Conf():
-    return TrainConf("ViT16", 1e-5, 64, (224, 224), 50)
+def MobileNetConf() -> TrainConf:
+    return TrainConf(
+        model_name="MobileNetV2",
+        lr=1e-2,
+        batch_size=32,
+        img_size=(32, 32),
+        num_epochs=50,
+    )
+
+def ViT16Conf() -> TrainConf:
+    return TrainConf(
+        model_name="ViT16",
+        lr=1e-5,
+        batch_size=64,
+        img_size=(224, 224),
+        num_epochs=50,
+    )

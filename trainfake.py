@@ -13,6 +13,7 @@ from main_colorspace import PROJECT_ROOT
 from model import ResNet50Model, MobileNetV2, ViT16
 from PIL import Image
 from pathlib import Path
+from train_utils import set_seed
 
 PROJECT_ROOT = Path(__file__).parent # Path to folder opened files
 
@@ -146,17 +147,8 @@ def run_training(model_class, **kwargs):
     print('Real vs Fake Completed.')
 
 if __name__== "__main__":
-    # to reproduce
-    seed = 42
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
-    torch.use_deterministic_algorithms = True
-    os.environ['PYTHONHASHSEED'] = str(seed)
 
+    set_seed(42)
     root = PROJECT_ROOT / "cifake1"
     num_class = len(label_to_class)
     model_name = 'MobileNetV2'
