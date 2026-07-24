@@ -9,31 +9,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
 seed = 42
-
-class CIFAKEDataSet():
-    def __init__(self, root):
-        self.root = root
-        self.class_to_label = config.make_class_to_label()
-    def create_dataset(self, d_type, save_filepath=None):
-        rf_dir = os.listdir(f"{self.root}{d_type}/") # Real or Fake
-        allfiles = []
-        for rf in rf_dir:
-            class_dir = os.listdir(f"{self.root}{d_type}/{rf}/")
-            for dir in class_dir:
-                files = os.listdir(f"{self.root}{d_type}/{rf}/{dir}/")
-                for f in files:
-                    filepath = f"{self.root}{d_type}/{rf}/{dir}/{f}"
-                    allfiles.append({"filepath":filepath, "class name": dir, "rf":rf})
-                    
-        df = pd.DataFrame(allfiles)
-        df.loc[df["rf"] == "REAL", "real"] = 1
-        df.loc[df["rf"] == "FAKE", "real"] = 0
-        df["real"] = df["real"].astype(int)
-        df["label"] = df["class name"].map(self.class_to_label)
-        if save_filepath is not None:
-            df.to_csv(save_filepath, index=False)
-        return df
-
 class TransDataset(Dataset):
     def __init__(self, dataframe, transform=None):
         self.dataframe = dataframe
@@ -85,6 +60,13 @@ def add_image_column(df: pd.DataFrame, filepath_col: str = "filepath", image_col
     df = df.copy()
     df[image_col] = df[filepath_col].apply(os.path.basename)
     return df
+
+def get_train_data(db):
+    test_size = 0.2
+    save_filepath = config.PROJECT_ROOT / f'{config.CFG[db]["DB"]}/train.csv'
+    df = load_csv_and_fix_filepath(save_filepath, config.PROJECT_ROOT)
+    df_train_r, df_valid_r = train_test_split(df_real, test_size=test_size, random_state=seed, shuffle=True)
+
 
 def get_dataset(db):
     test_size = 0.2
