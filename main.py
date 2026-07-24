@@ -21,10 +21,10 @@ def run_training(model_class, conf, db, seed,):
     def testing(model_name, db, test_setting, trainer, model, test_loader, df_test):
         preds = trainer.evaluate(model, test_loader)
         df_test['preds'] = preds
-        df_test.to_csv(config.PROJECT_ROOT / f'results/{model_name}_{db}_{test_setting}_seed_{seed}.csv', index=False) # e.g., results/MobileNet_FAKE_REAL.csv/
+        df_test.to_csv(config.PROJECT_ROOT / f'results/{model_name}_{db}_{test_setting}_{seed}.csv', index=False) # e.g., results/MobileNet_FAKE_REAL.csv/
 
     # Training Preparation
-    save_dir = (config.PROJECT_ROOT / db/ f"{conf.model_name}_{db}_seed_{seed}")
+    save_dir = (config.PROJECT_ROOT / db/ f"{conf.model_name}_{db}_{seed}")
     model_save_directory = prepare_save_directory(save_dir)
 
     if db == "REAL":

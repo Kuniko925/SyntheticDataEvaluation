@@ -2,8 +2,13 @@ from sklearn.metrics import confusion_matrix, accuracy_score, f1_score
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import config
+from model import ResNet50Model, MobileNetV2, ViT16
+from train_settings import *
+from pathlib import Path
+PROJECT_ROOT = Path(__file__).parent
 
-def plot_mean_confusion_matrix(csv_paths, label_to_class, title="", normalize="true", ax=None, add_colorbar=False,):
+def mean_confusion_matrix(csv_paths, label_to_class, title="", normalize="true", ax=None, add_colorbar=False,):
 
     labels = sorted(label_to_class.keys())
     class_names = [label_to_class[i] for i in labels]
@@ -109,7 +114,7 @@ def plot_mean_confusion_matrix(csv_paths, label_to_class, title="", normalize="t
     return cm_mean, cm_std, class_names, im
 
 
-def create_mean_std_results_table(
+def mean_std_results_table(
     seeds,
     train_dbs,
     model_names,
@@ -179,7 +184,7 @@ def create_mean_std_results_table(
     return summary_df
 
 
-def main():
+def main(models, db, seeds):
 
     # Plot averaged confusion matrices
     model_names = [
@@ -187,8 +192,7 @@ def main():
         for _, conf in EXPERIMENT_MODELS
     ]
 
-    for train_db in DB:
-
+    for train_db in db:
         for test_setting in ["REAL", "FAKE"]:
 
             fig, axes = plt.subplots(
@@ -201,25 +205,13 @@ def main():
 
             axes = np.atleast_1d(axes)
 
-            mean_cms = {}
-            std_cms = {}
-            images = []
+            mean_cms, std_cms, images = {}, {}, []
 
-            for i, (ax, model_name) in enumerate(
-                    zip(axes, model_names)
-            ):
-                csv_paths = [
-                    config.PROJECT_ROOT
-                    / "results"
-                    / (
-                        f"{model_name}_{train_db}_"
-                        f"{test_setting}_seed_{seed}.csv"
-                    )
-                    for seed in seeds
-                ]
+            for i, (ax, model_name) in enumerate(zip(axes, model_names)):
+                csv_paths = [PROJECT_ROOT / "results" / (f"{model_name}_{train_db}_{test_setting}_seed_{seed}.csv") for seed in seeds]
 
                 cm_mean, cm_std, class_names, im = (
-                    plot_mean_confusion_matrix(
+                    mean_confusion_matrix(
                         csv_paths=csv_paths,
                         label_to_class=config.label_to_class,
                         title=model_name,
@@ -241,35 +233,24 @@ def main():
                         labelleft=False,
                     )
 
-            fig.colorbar(
-                images[0],
-                ax=axes,
-                fraction=0.025,
-                pad=0.02,
-                label="Mean proportion",
-            )
+            fig.colorbar(images[0], ax=axes, fraction=0.025, pad=0.02, label="Mean proportion",)
 
-            out_path = (
-                    config.PROJECT_ROOT
-                    / "results"
-                    / (
-                        f"class_heatmap_{train_db}_"
-                        f"{test_setting}_mean.png"
-                    )
-            )
-
-            fig.savefig(
-                out_path,
-                dpi=300,
-                bbox_inches="tight",
-            )
-
+            out_path = (PROJECT_ROOT / "results" / (f"class_heatmap_{train_db}_{test_setting}_mean.png"))
+            fig.savefig(out_path, dpi=300, bbox_inches="tight",)
             plt.close(fig)
 
             print(f"Saved confusion matrix: {out_path}")
 
-    create_mean_std_results_table(
-        seeds=seeds,
-        train_dbs=DB,
-        model_names=model_names,
-    )
+    mean_std_results_table(seeds=seeds, train_dbs=DB, model_names=model_names,)
+
+if __name__== "__main__":
+
+    seeds = [12, 123, 1234]
+    DB = ['REAL', 'FAKE1', 'FAKE2']
+    EXPERIMENT_MODELS = [
+        (MobileNetV2, MobileNetConf()),
+        (ResNet50Model, ResNetConf()),
+        (ViT16, ViT16Conf()),
+    ]
+
+    main(EXPERIMENT_MODELS, DB, seeds,)
