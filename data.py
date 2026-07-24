@@ -61,12 +61,37 @@ def add_image_column(df: pd.DataFrame, filepath_col: str = "filepath", image_col
     df[image_col] = df[filepath_col].apply(os.path.basename)
     return df
 
+def get_train_loader(df, batch_size=32, img_size=(32, 32)):
+    transform = transforms.Compose([
+        transforms.Resize(img_size),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomVerticalFlip(),
+        transforms.RandomRotation(20),
+        transforms.ToTensor(),
+    ])
+    dataset = TransDataset(df, transform=transform)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True,drop_last=True)
+    return loader
+
+def get_test_loader(df, batch_size=32, img_size=(32, 32)):
+    transform = transforms.Compose([transforms.Resize(img_size), transforms.ToTensor(),])
+    dataset = TransDataset(df, transform=transform)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True,drop_last=False)
+    return loader
+
 def get_train_data(db):
     test_size = 0.2
-    save_filepath = config.PROJECT_ROOT / f'{config.CFG[db]["DB"]}/train.csv'
-    df = load_csv_and_fix_filepath(save_filepath, config.PROJECT_ROOT)
-    df_train_r, df_valid_r = train_test_split(df_real, test_size=test_size, random_state=seed, shuffle=True)
+    save_filepath = config.PROJECT_ROOT / 'train.csv'
+    df = pd.read_csv(save_filepath)
+    df = df[df['rf'] == db]
+    df_train, df_valid = train_test_split(df, test_size=test_size, random_state=seed, shuffle=True, stratify=df['label'],)
+    return df_train, df_valid
 
+def get_test_data(db):
+    save_filepath = config.PROJECT_ROOT / 'test.csv'
+    df = pd.read_csv(save_filepath)
+    df = df[df['rf'] == db]
+    return df
 
 def get_dataset(db):
     test_size = 0.2
@@ -99,6 +124,8 @@ def get_dataset(db):
     df_test_f = add_image_column(df_test_f)
 
     return df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f
+
+
 
 def get_dataloaders(df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f, batch_size=32, img_size=(32, 32)):
 

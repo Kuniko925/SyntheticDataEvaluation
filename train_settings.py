@@ -15,7 +15,7 @@ def ResNetConf() -> TrainConf:
         lr=1e-2,
         batch_size=32,
         img_size=(32, 32),
-        num_epochs=50,
+        num_epochs=30,
     )
 
 
@@ -25,7 +25,7 @@ def MobileNetConf() -> TrainConf:
         lr=1e-2,
         batch_size=32,
         img_size=(32, 32),
-        num_epochs=50,
+        num_epochs=30,
     )
 
 def ViT16Conf() -> TrainConf:
@@ -34,5 +34,5 @@ def ViT16Conf() -> TrainConf:
         lr=1e-5,
         batch_size=64,
         img_size=(224, 224),
-        num_epochs=50,
+        num_epochs=30,
     )

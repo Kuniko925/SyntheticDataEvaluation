@@ -14,38 +14,40 @@ def run_training(model_class, conf, db, seed,):
     set_seed(seed)
 
     # Data
-    df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f = data.get_dataset(db)
-    train_loader_r, valid_loader_r, test_loader_r, train_loader_f, valid_loader_f, test_loader_f = data.get_dataloaders(
-        df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f, conf.batch_size, conf.img_size)
+    df_train, df_valid = data.get_train_data(db)
+    df_test_real = data.get_test_data('REAL')
+    df_test_fake1 = data.get_test_data('FAKE1')
+    df_test_fake2 = data.get_test_data('FAKE2')
 
-    def testing(model_name, db, test_setting, trainer, model, test_loader, df_test):
-        preds = trainer.evaluate(model, test_loader)
-        df_test['preds'] = preds
-        df_test.to_csv(config.PROJECT_ROOT / f'results/{model_name}_{db}_{test_setting}_{seed}.csv', index=False) # e.g., results/MobileNet_FAKE_REAL.csv/
+    train_loader = data.get_train_loader(df_train, conf.batch_size, conf.img_size)
+    valid_loader = data.get_test_loader(df_valid, conf.batch_size, conf.img_size)
 
-    # Training Preparation
-    save_dir = (config.PROJECT_ROOT / db/ f"{conf.model_name}_{db}_{seed}")
+    test_loader_real = data.get_test_loader(df_test_real, conf.batch_size, conf.img_size)
+    test_loader_fake1 = data.get_test_loader(df_test_fake1, conf.batch_size, conf.img_size)
+    test_loader_fake2 = data.get_test_loader(df_test_fake2, conf.batch_size, conf.img_size)
+
+    # Training Preparation, db name refers to training dataset
+    save_dir = (config.PROJECT_ROOT / db / f"{conf.model_name}_{seed}")
     model_save_directory = prepare_save_directory(save_dir)
-
-    if db == "REAL":
-        train_loader = train_loader_r
-        valid_loader = valid_loader_r
-    elif db == "FAKE1" or db == "FAKE2":
-        train_loader = train_loader_f
-        valid_loader = valid_loader_f
 
     # Training
     model = model_class(num_class)
     trainer = TransModelTrainer() if conf.model_name == 'ViT16' else CNNModelTrainer()
     best_val_file = trainer.fit(model, train_loader, valid_loader, model_save_directory, epochs=conf.num_epochs, lr=conf.lr)
 
-    # Load best model
+    # Load the best model
     model = model_class(num_class)
     model.load_state_dict(torch.load(best_val_file))
 
     # Test
-    testing(conf.model_name, db, 'REAL', trainer, model, test_loader_r, df_test_r)
-    testing(conf.model_name, db, 'FAKE', trainer, model, test_loader_f, df_test_f)
+    output_path = config.PROJECT_ROOT / f'results/{conf.model_name}_{db}_REAL_{seed}.csv'
+    evaluate_and_save(model, trainer, test_loader_real, df_test_real, output_path)
+
+    output_path = config.PROJECT_ROOT / f'results/{conf.model_name}_{db}_FAKE1_{seed}.csv'
+    evaluate_and_save(model, trainer, test_loader_fake1, df_test_fake1, output_path)
+
+    output_path = config.PROJECT_ROOT / f'results/{conf.model_name}_{db}_FAKE2_{seed}.csv'
+    evaluate_and_save(model, trainer, test_loader_fake2, df_test_fake2, output_path)
 
 if __name__== "__main__":
 
