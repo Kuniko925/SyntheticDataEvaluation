@@ -14,32 +14,45 @@ def mix_finetune(model_class, conf, real_ratio=0.1, seed=42,):
     num_class = len(config.label_to_class)
 
     # Data
-    df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f = data.get_dataset('FAKE1')
-    df_train_r_sub = stratified_sample(df_train_r, label_col="label", frac=real_ratio, random_state=seed)
-    df_train_f_sub = stratified_sample(df_train_f, label_col="label", frac=(1-real_ratio), random_state=seed)
-    df_valid_r_sub = stratified_sample(df_valid_r, label_col="label", frac=real_ratio, random_state=seed)
-    df_valid_f_sub = stratified_sample(df_valid_f, label_col="label", frac=(1-real_ratio), random_state=seed)
-    df_train = pd.concat([df_train_r_sub, df_train_f_sub], axis=0)
-    df_valid = pd.concat([df_valid_r_sub, df_valid_f_sub], axis=0)
+    df_train_real, df_valid_real = data.get_train_data('REAL')
+    df_train_fake1, df_valid_fake1 = data.get_train_data('FAKE1')
 
-    train_loader, valid_loader, test_loader_r, _, _, _ = data.get_dataloaders(
-        df_train, df_valid, df_test_r, df_train_f, df_valid_f, df_test_f, conf.batch_size, conf.img_size)
+    # train
+    df_train_real_sub = stratified_sample(df_train_real, label_col="label", frac=real_ratio, random_state=seed)
+    df_train_fake1_sub = stratified_sample(df_train_fake1, label_col="label", frac=(1-real_ratio), random_state=seed)
+
+    # valid
+    df_valid_real_sub = stratified_sample(df_valid_real, label_col="label", frac=real_ratio, random_state=seed)
+    df_valid_fake1_sub = stratified_sample(df_valid_fake1, label_col="label", frac=(1-real_ratio), random_state=seed)
+
+    # test
+    df_test = data.get_test_data('REAL')
+
+    # concat
+    df_train = pd.concat([df_train_real_sub, df_train_fake1_sub], axis=0, ignore_index=True,)
+    df_valid = pd.concat([df_valid_real_sub, df_valid_fake1_sub], axis=0, ignore_index=True,)
+
+    train_loader = data.get_train_loader(df_train, conf.batch_size, conf.img_size)
+    valid_loader = data.get_test_loader(df_valid, conf.batch_size, conf.img_size)
+    test_loader = data.get_test_loader(df_test, conf.batch_size, conf.img_size)
 
     # Training Preparation
-    model_save_directory = prepare_save_directory(config.PROJECT_ROOT / "MIX" / conf.model_name / str(int(real_ratio * 100)))
+    str_real_ratio = str(int(real_ratio * 100))
+    save_dir = (config.PROJECT_ROOT / f"MIX/{conf.model_name}_{str_real_ratio}_{seed}")
+    model_save_directory = prepare_save_directory(save_dir)
 
     # Training
     model = model_class(num_class)
     trainer = TransModelTrainer() if conf.model_name == 'ViT16' else CNNModelTrainer()
     best_val_file = trainer.fit(model, train_loader, valid_loader, model_save_directory, epochs=conf.num_epochs, lr=conf.lr)
 
-    # Load best model
+    # Load the best model
     model = model_class(num_class)
     model.load_state_dict(torch.load(best_val_file, weights_only=False))
 
     # Test
-    df_test_r['preds'] = trainer.evaluate(model, test_loader_r)
-    df_test_r.to_csv(config.PROJECT_ROOT / f"results/{conf.model_name}_mix_{int(real_ratio * 100)}_seed_{seed}.csv", index=False)
+    output_path = config.PROJECT_ROOT / f"results/{conf.model_name}_MIX_{int(real_ratio * 100)}_{seed}.csv"
+    evaluate_and_save(model, trainer, test_loader, df_test, output_path)
 
 if __name__== "__main__":
 
