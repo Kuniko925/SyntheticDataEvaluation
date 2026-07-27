@@ -38,8 +38,7 @@ def mix_finetune(model_class, conf, real_ratio=0.1, seed=42,):
 
     # Training Preparation
     str_real_ratio = str(int(real_ratio * 100))
-    save_dir = (config.PROJECT_ROOT / f"MIX/{conf.model_name}_{str_real_ratio}_{seed}")
-    model_save_directory = prepare_save_directory(save_dir)
+    model_save_directory = config.PROJECT_ROOT / f"MIX/{conf.model_name}_{str_real_ratio}_{seed}"
 
     # Training
     model = model_class(num_class)
@@ -59,7 +58,7 @@ if __name__== "__main__":
     starttime = time.time()
 
     seeds = [12, 123, 1234]
-    real_ratios = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    real_ratios = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,]
     EXPERIMENT_MODELS = [
         (MobileNetV2, MobileNetConf()),
         (ResNet50Model, ResNetConf()),
