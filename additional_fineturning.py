@@ -23,8 +23,7 @@ def additional_finetune(model_class, conf, saving_epochs = [10], seed=42):
     test_loader = data.get_test_loader(df_test, conf.batch_size, conf.img_size)
 
     # Training Preparation
-    save_dir = (config.PROJECT_ROOT / f"ADD/{conf.model_name}_{seed}")
-    model_save_directory = prepare_save_directory(save_dir)
+    model_save_directory = config.PROJECT_ROOT / f"ADDITIONAL/{conf.model_name}_{seed}"
 
     # Training
     model = model_class(num_class)
@@ -35,13 +34,13 @@ def additional_finetune(model_class, conf, saving_epochs = [10], seed=42):
 
     for saving_epoch in saving_epochs:
         # Load the best model
-        best_val_file = config.PROJECT_ROOT / f'Unfreeze/{conf.model_name}/model_{str(saving_epoch-1)}.pt'
+        best_val_file = config.PROJECT_ROOT / f'ADDITIONAL/{conf.model_name}_{seed}_{str(saving_epoch)}.pt'
         model = model_class(num_class)
         model.load_state_dict(torch.load(best_val_file, weights_only=False))
 
         # Test
         df_test['preds'] = trainer.evaluate(model, test_loader)
-        df_test.to_csv(config.PROJECT_ROOT / f'results/{conf.model_name}_Unfreeze_{str(str(saving_epoch))}.csv', index=False)
+        df_test.to_csv(config.PROJECT_ROOT / f'results/{conf.model_name}_ADDITIONAL_{str(saving_epoch)}_{seed}.csv', index=False)
 
 if __name__== "__main__":
 

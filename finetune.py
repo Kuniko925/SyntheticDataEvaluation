@@ -91,8 +91,9 @@ class BaseTrainer(ABC):
                     best_val_file = Path(f"{model_save_path}_best.pt")
                     torch.save(model.state_dict(), best_val_file)
             else:
-                best_val_file = Path(f"{model_save_path}_checkpoint_{epoch}.pt")
-                torch.save(model.state_dict(), best_val_file)
+                if epoch in [e - 1 for e in saving_epochs]:
+                    best_val_file = Path(f"{model_save_path}_{epoch+1}.pt")
+                    torch.save(model.state_dict(), best_val_file)
 
             if cnn: scheduler.step(val_f1)
 

@@ -55,8 +55,8 @@ def mean_confusion_matrix(csv_paths, label_to_class, title="", normalize="true",
 
     plt.setp(ax.get_xticklabels(), rotation=90, ha="right",)
 
-    fmt = ".2f"
     threshold = ( np.nanmax(cm_mean) * 0.6 if np.size(cm_mean) else 0)
+    fmt = ".2f" if normalize is not None else ".0f"
 
     for i in range(cm_mean.shape[0]):
         for j in range(cm_mean.shape[1]):
@@ -71,7 +71,7 @@ def mean_confusion_matrix(csv_paths, label_to_class, title="", normalize="true",
                     if cm_mean[i, j] > threshold
                     else "black"
                 ),
-                fontsize=10,
+                fontsize=12,
             )
 
     if created_fig:
@@ -137,7 +137,7 @@ def main(models, db, seeds):
                         csv_paths=csv_paths,
                         label_to_class=config.label_to_class,
                         title=model_name,
-                        normalize="true",
+                        normalize=None,
                         ax=ax,
                         add_colorbar=False,
                     )
@@ -155,7 +155,7 @@ def main(models, db, seeds):
                         labelleft=False,
                     )
 
-            fig.colorbar(images[0], ax=axes, fraction=0.025, pad=0.02, label="Mean proportion",)
+            fig.colorbar(images[0], ax=axes, fraction=0.025, pad=0.02, label="Mean count",)
             out_path = PROJECT_ROOT / "results" / f"class_heatmap_{train_db}_{test_setting}_mean.png"
             fig.savefig(out_path, dpi=300, bbox_inches="tight",)
             plt.close(fig)
