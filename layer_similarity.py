@@ -1,27 +1,12 @@
 from model import MobileNetV2, ResNet50Model, ViT16
 import config
-import torch
 import torch.nn.functional as F
-import pandas as pd
-import os
 import data
-from dataclasses import dataclass
-import random
-import numpy as np
 import re
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-seed = 42
-random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
-torch.cuda.manual_seed(seed)
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.deterministic = True
-torch.use_deterministic_algorithms = True
-os.environ['PYTHONHASHSEED'] = str(seed)
-
+from train_utils import *
+from train_settings import *
 
 def _to_vector(act: torch.Tensor) -> torch.Tensor:
     if act.dim() == 4:
@@ -112,24 +97,6 @@ def compare_models_per_layer(fake_model, real_model, test_loader, layer_names, d
 
     df = pd.DataFrame(rows)
     return df
-
-@dataclass
-class TrainConf:
-    model_name: str
-    lr: float
-    batch_size: int
-    img_size: tuple[int, int]
-    num_epochs: int
-
-def ResNetConf():
-    return TrainConf("ResNet50", 1e-2, 32, (32, 32), 50)
-
-def MobileNetConf():
-    return TrainConf("MobileNetV2", 1e-2, 32, (32, 32), 50)
-
-def ViT16Conf():
-    return TrainConf("ViT16", 1e-5, 64, (224, 224), 50)
-
 
 def classwise_agreement(model_a, model_b, test_loader, device, num_class):
     model_a.eval().to(device)
@@ -330,20 +297,17 @@ MODEL_REGISTRY = {
 
 def compute_structure_difference(model_name, db):
 
+    seed = 123
     spec = MODEL_REGISTRY[model_name]
     model_class = spec["ctor"]
     conf = spec["conf"]
     list_layers = spec["list_layers"]
 
-    epochs = config.BEST_MODEL_PATH[db][model_name]
-    best_val_file = config.PROJECT_ROOT / f'{db}/{model_name}/{db}model_{epochs}.pt'
-
+    best_val_file = config.PROJECT_ROOT / f'{db}/{model_name}_{seed}_best.pt'
     fake_model = model_class(num_class)
     fake_model.load_state_dict(torch.load(best_val_file, weights_only=True))
 
-    epochs = config.BEST_MODEL_PATH['REAL'][model_name]
-    best_val_file = config.PROJECT_ROOT / f'REAL/{model_name}/REALmodel_{epochs}.pt'
-
+    best_val_file = config.PROJECT_ROOT / f'REAL/{model_name}_{seed}_best.pt'
     real_model = model_class(num_class)
     real_model.load_state_dict(torch.load(best_val_file, weights_only=True))
 
@@ -351,17 +315,16 @@ def compute_structure_difference(model_name, db):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f = data.get_dataset(db)
-    train_loader_r, valid_loader_r, test_loader_r, train_loader_f, valid_loader_f, test_loader_f = data.get_dataloaders(
-        df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f, conf.batch_size, conf.img_size)
+    df_test_real = data.get_test_data('REAL')
+    test_loader_real = data.get_test_loader(df_test_real, conf.batch_size, conf.img_size)
 
     layer_names = list_layers(fake_model)
-    df_layer_diff = compare_models_per_layer(fake_model, real_model, test_loader_r, layer_names, device)
+    df_layer_diff = compare_models_per_layer(fake_model, real_model, test_loader_real, layer_names, device)
 
-    save_path = config.PROJECT_ROOT / f"results/{model_name}_layer_diff_{db}_vs_REAL.csv"
+    save_path = config.PROJECT_ROOT / f"results/{model_name}_layer_diff_{db}_vs_REAL_{seed}.csv"
     df_layer_diff.to_csv(save_path, index=False)
 
-    agree_c, support = classwise_agreement(fake_model, real_model, test_loader_r, device, num_class)
+    agree_c, support = classwise_agreement(fake_model, real_model, test_loader_real, device, num_class)
     df_agree = pd.DataFrame({
         "class": np.arange(num_class),
         "agreement": agree_c,
@@ -378,8 +341,8 @@ def compute_structure_difference(model_name, db):
     df_agree.to_csv(out_path, index=False)
     print("saved:", out_path)
 
-    print("REAL model acc on db test_real:", simple_acc(real_model, test_loader_r, device))
-    summary, df_cls = overlap_correctness(real_model, fake_model, test_loader_r, device, num_class=num_class)
+    print("REAL model acc on db test_real:", simple_acc(real_model, test_loader_real, device))
+    summary, df_cls = overlap_correctness(real_model, fake_model, test_loader_real, device, num_class=num_class)
     # summary
     summary_path = config.PROJECT_ROOT / f"results/{model_name}_overlap_summary_{db}_vs_REAL.csv"
     pd.DataFrame([summary]).to_csv(summary_path, index=False)
@@ -388,7 +351,7 @@ def compute_structure_difference(model_name, db):
         cls_path = config.PROJECT_ROOT / f"results/{model_name}_overlap_byclass_{db}_vs_REAL.csv"
         df_cls.to_csv(cls_path, index=False)
 
-    df_dist = compare_models_per_layer_dist(fake_model, real_model, test_loader_r, layer_names, device)
+    df_dist = compare_models_per_layer_dist(fake_model, real_model, test_loader_real, layer_names, device)
     df_dist["db"] = db
     df_dist["model"] = model_name
     df_dist["layer_short"] = df_dist["layer"].apply(lambda x: short_layer_name(model_name, x))
@@ -449,15 +412,9 @@ def compare_models_per_layer_dist(fake_model, real_model, test_loader, layer_nam
     return pd.concat(rows, ignore_index=True)
 
 def plot_layer_dist_box(df_long, value_col, out_path):
-    legend_maps = {'FAKE1':"GEN1", "FAKE2": "GEN2"}
+    legend_maps = {'FAKE1':"SDGen", "FAKE2": "EDMGen"}
     plt.figure(figsize=(18, 8))
-    ax = sns.boxplot(
-        data=df_long,
-        x="layer_short",
-        y=value_col,
-        hue="db",
-        showfliers=False
-    )
+    ax = sns.boxplot(data=df_long, x="layer_short", y=value_col, hue="db", showfliers=False)
 
     handles, labels = ax.get_legend_handles_labels()
     new_labels = [legend_maps.get(l, l) for l in labels]

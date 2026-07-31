@@ -31,20 +31,13 @@ def add_distance_to_centroid(
 
 if __name__== "__main__":
 
-
     model_names = ['CLIP', 'DINOv2', 'DINOv3']
     reducer_names = ['UMAP', 'TSNE']
     DB = ['FAKE1', 'FAKE2']
-
-    metric_colors = {
-        "precision": "C0",
-        "recall": "C1",
-        "f1-score": "C2",
-    }
-
+    metric_colors = {"precision": "C0", "recall": "C1", "f1-score": "C2",}
+    metric_markers = {"precision": "o", "recall": "^", "f1-score": "s"}
     db_alpha = {"FAKE1": 1.0, "FAKE2": 0.35}
 
-    metric_markers = {"precision": "o", "recall": "^", "f1-score": "s"}
 
     for model_name in model_names:
         for reducer_name in reducer_names:
@@ -65,10 +58,10 @@ if __name__== "__main__":
                 for db in DB:
                     # --- Distance ---
                     df_distance = add_distance_to_centroid(
-                        centroids=config.PROJECT_ROOT / f"results/dis_{db}_{model_name}_{reducer_name}.csv",
-                        points=config.PROJECT_ROOT / f"results/embed_{db}_{model_name}_{reducer_name}.csv"
+                        centroids=config.PROJECT_ROOT / f"results/dis_{db}_{model_name}_{reducer_name}_123.csv",
+                        points=config.PROJECT_ROOT / f"results/embed_{db}_{model_name}_{reducer_name}_123.csv"
                     )
-                    df_distance = df_distance[df_distance["rf"] == "FAKE"]
+                    df_distance = df_distance[df_distance["rf"] == db]
                     df_distance = (
                         df_distance.groupby("label", as_index=False)["dist_to_centroid"]
                         .mean()
@@ -76,7 +69,7 @@ if __name__== "__main__":
                     )
 
                     # --- Performance ---
-                    filepath = config.PROJECT_ROOT / f"results/{m}_{db}_REAL.csv"
+                    filepath = config.PROJECT_ROOT / f"results/{m}_{db}_REAL_123.csv"
                     df_performance = pd.read_csv(filepath)
 
                     y_true = df_performance["label"]
@@ -141,7 +134,7 @@ if __name__== "__main__":
                 ncol=5,
                 bbox_to_anchor=(0.5, 0.02),
             )
-            save_filepath = config.PROJECT_ROOT / f"results/{model_name}_{reducer_name}_prec_recall_f1_FAKE1_FAKE2.png"
+            save_filepath = config.PROJECT_ROOT / f"results/{model_name}_{reducer_name}_prec_recall_f1_FAKE1_FAKE2_123.png"
             fig.savefig(save_filepath, bbox_inches="tight")
             plt.close(fig)
 
