@@ -6,8 +6,7 @@ FAKE1
 FAKE2
 REAL
 MIX
-Layerwise
 .idea
-Unfreeze
 ADDITIONAL
 ONE
+.ipynb_checkpoints

@@ -75,12 +75,12 @@ def main(models: list[str], seeds: list[int]) -> None:
     )
 
     summary_df["accuracy"] = summary_df.apply(
-        lambda r: f"{r['accuracy_mean']:.3f}±{r['accuracy_std']:.3f}",
+        lambda r: f"{r['accuracy_mean']:.2f}±{r['accuracy_std']:.2f}",
         axis=1,
     )
 
     summary_df["f1"] = summary_df.apply(
-        lambda r: f"{r['f1_mean']:.3f}±{r['f1_std']:.3f}",
+        lambda r: f"{r['f1_mean']:.2f}±{r['f1_std']:.2f}",
         axis=1,
     )
 

@@ -29,6 +29,3 @@ label_to_class = {0: 'airplane',
 
 def make_class_to_label() -> dict[str, int]:
     return {class_name: label for label, class_name in label_to_class.items()}
-
-def build_res_filepath(data_type, model, test_setting='REAL'):
-    return PROJECT_ROOT / f"results/{model}_{data_type}_{test_setting}.csv"
