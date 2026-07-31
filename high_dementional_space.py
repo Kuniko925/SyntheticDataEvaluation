@@ -10,6 +10,7 @@ from data import TransDataset
 from sklearn.manifold import TSNE
 from transformers import CLIPProcessor, CLIPModel
 import config
+import time
 
 model_specs = [
     ("DINOv2", "facebook/dinov2-small"),
@@ -17,25 +18,22 @@ model_specs = [
     ("CLIP", "openai/clip-vit-base-patch32"),
 ]
 
-reducer_specs = [
-    ("UMAP", lambda: umap.UMAP(n_neighbors=15, min_dist=0.1, metric="cosine")),
-    ("TSNE", lambda: TSNE(n_components=2, perplexity=30, metric="cosine", random_state=42)),
-]
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 
-def reduce_dim(df_train, image_embeddings, reducer, model_name, reducer_name, db='FAKE1'):
+def reduce_dim(df_train, image_embeddings, reducer, model_name, reducer_name, db='FAKE1', seed=42):
     embeddings_2d = reducer.fit_transform(image_embeddings)
     df_train['embeddings x'] = embeddings_2d[:,0]
     df_train['embeddings y'] = embeddings_2d[:,1]
-    save_filepath = config.PROJECT_ROOT / f'results/embed_{db}_{model_name}_{reducer_name}.csv'
+    save_filepath = config.PROJECT_ROOT / f'results/embed_{db}_{model_name}_{reducer_name}_{seed}.csv'
     df_train.to_csv(save_filepath, index=False)
     return embeddings_2d
 
 
-def plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name, db='FAKE1'):
-    #title = f"{model_name} Embeddings per Class by {reducer_name}"
-    save_filepath = config.PROJECT_ROOT / f'results/{db}_{model_name}_{reducer_name}.png'
+def plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name, db='FAKE1', seed=42):
+
+    save_filepath = config.PROJECT_ROOT / f'results/{db}_{model_name}_{reducer_name}_{seed}.png'
 
     color_map = {0: "lightpink", 1: "lightblue"}
     rf_label_map = {0: "GEN", 1: "REAL"}
@@ -100,7 +98,7 @@ def plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name, d
     plt.close(fig)
 
 
-def save_distance(embeddings_2d, labels, reals, model_name, reducer_name, db='FAKE1'):
+def save_distance(embeddings_2d, labels, reals, model_name, reducer_name, db='FAKE1', seed=42):
     results = {}
 
     for i in range(len(config.label_to_class)):  # Class
@@ -137,7 +135,7 @@ def save_distance(embeddings_2d, labels, reals, model_name, reducer_name, db='FA
     df_dino.reset_index(inplace=True)
     df_dino.rename(columns={'index': 'label'}, inplace=True)
 
-    save_filepath = config.PROJECT_ROOT / f'results/dis_{db}_{model_name}_{reducer_name}.csv'
+    save_filepath = config.PROJECT_ROOT / f'results/dis_{db}_{model_name}_{reducer_name}_{seed}.csv'
     df_dino.to_csv(save_filepath, index=False)
 
 @torch.no_grad()
@@ -174,15 +172,15 @@ def extract_embeddings(images, model_name, hf_id, batch_size):
     return image_embeddings
 
 
-def run_reduction_pipeline(df_train, embeddings: np.ndarray, labels: np.ndarray, reals: np.ndarray, model_name: str, reducer_name: str, reducer, db):
-    embeddings_2d = reduce_dim(df_train, embeddings, reducer, model_name, reducer_name, db) # <- change signature recommended
-    plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name, db)
-    save_distance(embeddings_2d, labels, reals, model_name, reducer_name, db)
+def run_reduction_pipeline(df_train, embeddings: np.ndarray, labels: np.ndarray, reals: np.ndarray, model_name: str, reducer_name: str, reducer, db, seed=42):
+    embeddings_2d = reduce_dim(df_train, embeddings, reducer, model_name, reducer_name, db, seed) # <- change signature recommended
+    plot_2d_embeddings(embeddings_2d, labels, reals, model_name, reducer_name, db, seed)
+    save_distance(embeddings_2d, labels, reals, model_name, reducer_name, db, seed)
 
 def _l2_normalize(x, axis=1, eps=1e-12):
     return x / (np.linalg.norm(x, axis=axis, keepdims=True) + eps)
 
-def save_distance_hd(embeddings_hd, labels, reals, model_name, db="FAKE1", metric="cosine", normalize=True):
+def save_distance_hd(embeddings_hd, labels, reals, model_name, db="FAKE1", metric="cosine", normalize=True, seed=42):
     results = []
 
     for i in range(len(config.label_to_class)):
@@ -215,10 +213,10 @@ def save_distance_hd(embeddings_hd, labels, reals, model_name, db="FAKE1", metri
         results.append({"label": i, "centroid_dist_hd": dist})
 
     df = pd.DataFrame(results)
-    save_filepath = config.PROJECT_ROOT / f"results/disHD_{db}_{model_name}.csv"
+    save_filepath = config.PROJECT_ROOT / f"results/disHD_{db}_{model_name}_{seed}.csv"
     df.to_csv(save_filepath, index=False)
 
-def compute_distance(db='FAKE1'):
+def compute_distance(db='FAKE1', seed=42):
 
     train_filepath = config.PROJECT_ROOT / f'train.csv'
     df = pd.read_csv(train_filepath)
@@ -267,13 +265,97 @@ def compute_distance(db='FAKE1'):
 
     for model_name, hf_id in model_specs:
         image_embeddings = extract_embeddings(images, model_name=model_name, hf_id=hf_id, batch_size=32)
-        save_distance_hd(image_embeddings, labels, flags, model_name, db=db, metric="cosine")
+        save_distance_hd(image_embeddings, labels, flags, model_name, db=db, metric="cosine", seed=seed)
+
+        reducer_specs = [
+            ("UMAP", lambda: umap.UMAP(n_neighbors=15, min_dist=0.1, metric="cosine", random_state=seed)),
+            ("TSNE", lambda: TSNE(n_components=2, perplexity=30, metric="cosine", random_state=seed)),
+        ]
+
         for reducer_name, reducer_fn in reducer_specs:
             reducer = reducer_fn()
-            run_reduction_pipeline(df_selected, image_embeddings, labels, flags, model_name, reducer_name, reducer, db)
+            run_reduction_pipeline(df_selected, image_embeddings, labels, flags, model_name, reducer_name, reducer, db, seed)
 
 if __name__== "__main__":
 
+    starttime = time.time()
+
+    seeds = [12, 123, 1234]
     dbs = ['FAKE1', 'FAKE2']
+    model_names = ["CLIP", "DINOv2", "DINOv3"]
+    reducer_names = ["UMAP", "TSNE"]
+
     for db in dbs:
-        compute_distance(db)
+        for seed in seeds:
+            compute_distance(db, seed)
+
+    endtime = time.time()
+    interval = endtime - starttime
+    print("running time = %dh %dm %ds" % (int(interval / 3600), int((interval % 3600) / 60), int((interval % 3600) % 60)))
+
+
+    dfs = []
+
+    for db in dbs:
+        for model in model_names:
+            for reducer in reducer_names:
+                for seed in seeds:
+                    fname = (
+                        f"dis_{db}_{model}_{reducer}_{seed}.csv"
+                    )
+                    path = config.PROJECT_ROOT / "results" / fname
+
+                    result_df = pd.read_csv(path)
+                    result_df["DB"] = db
+                    result_df["model"] = model
+                    result_df["reducer"] = reducer
+                    result_df["seed"] = seed
+
+                    dfs.append(result_df)
+
+    all_df = pd.concat(dfs, ignore_index=True)
+
+    all_df["centroid_dist"] = np.hypot(
+        all_df["r centroid x"] - all_df["f centroid x"],
+        all_df["r centroid y"] - all_df["f centroid y"],
+    )
+
+    all_df["relative_centroid_dist"] = (
+            all_df["centroid_dist"]
+            / (
+                    all_df["r radius"]
+                    + all_df["f radius"]
+                    + 1e-9
+            )
+    )
+
+    raw_path = (
+            config.PROJECT_ROOT
+            / "results"
+            / "distance_from_centroid_all_seeds.csv"
+    )
+    all_df.to_csv(raw_path, index=False)
+
+    summary_df = (
+        all_df
+        .groupby(
+            ["DB", "model", "reducer", "label"],
+            as_index=False,
+        )
+        .agg(
+            centroid_dist_mean=("centroid_dist", "mean"),
+            centroid_dist_std=("centroid_dist", "std"),
+            relative_dist_mean=("relative_centroid_dist", "mean"),
+            relative_dist_std=("relative_centroid_dist", "std"),
+            real_radius_mean=("r radius", "mean"),
+            fake_radius_mean=("f radius", "mean"),
+        )
+    )
+
+    summary_path = (
+            config.PROJECT_ROOT
+            / "results"
+            / "distance_from_centroid_summary.csv"
+    )
+    summary_df.to_csv(summary_path, index=False)
+
