@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as stats
 from scipy.stats import pearsonr, spearmanr
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, accuracy_score
 import config
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
@@ -19,7 +19,7 @@ _CS_MAP = {
 }
 
 STAT_METRICS = ["mean", "skew", "kurtosis", "entropy"]
-PERF_METRICS = ["Precision", "Recall", "F1"]
+PERF_METRICS = ["Accuracy", "F1"]
 MODELS = ["ResNet50", "MobileNetV2", "ViT16"]
 TARGETS = [
     ("LAB", "L"),
@@ -78,15 +78,30 @@ def load_performance_df(seeds) -> pd.DataFrame:
             for seed in seeds:
                 csv_path = PROJECT_ROOT / "results" / f"{model}_{db_name}_REAL_{seed}.csv"
                 result_df = pd.read_csv(csv_path)
-                report = classification_report(result_df["label"], result_df["preds"], output_dict=True, zero_division=0,)
+
+                y_true = result_df["label"]
+                y_pred = result_df["preds"]
+
+                report = classification_report(
+                    y_true,
+                    y_pred,
+                    output_dict=True,
+                    zero_division=0,
+                )
 
                 for label_text, scores in report.items():
                     if not label_text.isdigit():
                         continue
                     label = int(label_text)
+
+                    true_binary = (y_true == label)
+                    pred_binary = (y_pred == label)
+                    acc = accuracy_score(
+                        true_binary,
+                        pred_binary
+                    )
                     rows.append({
-                        "DB": db_name, "model": model, "label": label, "class_name": config.label_to_class[label], "Precision": scores["precision"],
-                        "Recall": scores["recall"], "F1": scores["f1-score"],})
+                        "DB": db_name, "model": model, "label": label, "class_name": config.label_to_class[label], "Accuracy": acc, "F1": scores["f1-score"],})
 
     performance_df = pd.DataFrame(rows)
     return (performance_df.groupby(["DB", "model", "label", "class_name"], as_index=False,)[PERF_METRICS].mean())
@@ -143,97 +158,345 @@ def make_corr_table(analysis_df: pd.DataFrame) -> pd.DataFrame:
 
     return (pd.DataFrame(rows).sort_values(group_cols + ["metric"]).reset_index(drop=True))
 
-def plot_performance_gap(analysis_df: pd.DataFrame, metric: str = "F1", annot_model: str | None = "MobileNetV2",):
+def plot_performance_gap(
+    analysis_df: pd.DataFrame,
+    metric: str = "F1",
+    annot_model: str | None = "MobileNetV2",
+):
     stat_metrics = analysis_df["stat_metric"].unique()
     models = analysis_df["model"].unique()
 
     ncols = 2
     nrows = int(np.ceil(len(stat_metrics) / ncols))
 
-    fig, axes = plt.subplots(nrows, ncols, figsize=(7 * ncols, 5 * nrows), squeeze=False, sharey=True,)
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(7 * ncols, 5 * nrows),
+        squeeze=False,
+        sharey=True,
+    )
     axes = axes.ravel()
 
-    markers = ["o", "^", "s", "D", "P", "X"]
-    model_markers = {model: markers[i % len(markers)]for i, model in enumerate(models)}
+    DB_COLORS = {
+        "FAKE1": "tab:blue",  # SDGen
+        "FAKE2": "tab:orange",  # EDMGen
+    }
+
+    model_markers = {
+        "MobileNetV2": "o",
+        "ResNet50": "^",
+        "ViT16": "s",
+    }
+
+    db_label_map = {
+        "FAKE1": "SDGen",
+        "FAKE2": "EDMGen",
+    }
 
     y_col = f"{metric}_diff"
 
     for i, stat_metric in enumerate(stat_metrics):
         ax = axes[i]
 
-        stat_df = analysis_df.query("stat_metric == @stat_metric")
+        stat_df = analysis_df.query(
+            "stat_metric == @stat_metric"
+        )
 
-        for model, model_df in stat_df.groupby("model"):
-            ax.scatter(model_df["color_diff"], model_df[y_col], marker=model_markers[model], s=70, alpha=0.8, label=model,)
+        # FAKE1 / FAKE2
+        for db2, db_df in stat_df.groupby("DB2"):
 
-            if model == annot_model:
-                for _, row in model_df.iterrows():
-                    ax.annotate(
-                        row["class_name"],
-                        (row["color_diff"], row[y_col]),
-                        xytext=(4, 3),
-                        textcoords="offset points",
-                        fontsize=12,
-                    )
+            for model, model_df in db_df.groupby("model"):
+
+                ax.scatter(
+                    model_df["color_diff"],
+                    model_df[y_col],
+                    marker=model_markers[model],
+                    color=DB_COLORS[db2],
+                    linewidths=1.2,
+                    s=70,
+                    alpha=0.9,
+                )
+
+                # class annotation
+                if model == annot_model:
+                    for _, row in model_df.iterrows():
+                        ax.annotate(
+                            row["class_name"],
+                            (row["color_diff"], row[y_col]),
+                            xytext=(4, 3),
+                            textcoords="offset points",
+                            fontsize=10,
+                        )
 
         ax.set_title(stat_metric)
-        ax.set_xlabel("Color statistics difference")
+        ax.set_xlabel("Illumination distribution difference")
         ax.set_ylabel(y_col)
         ax.grid(alpha=0.25)
 
     for ax in axes[len(stat_metrics):]:
         ax.axis("off")
 
-    legend_handles = [
+    # Model legend: marker shape
+    model_handles = [
         Line2D(
             [0],
             [0],
             marker=model_markers[model],
+            color="black",
             linestyle="",
-            markersize=12,
+            markersize=9,
             label=model,
         )
         for model in models
     ]
 
+    # Dataset legend: color
+    db_handles = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="none",
+            markerfacecolor=DB_COLORS["FAKE1"],
+            linestyle="",
+            markersize=9,
+            label="SDGen",
+        ),
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="none",
+            markerfacecolor=DB_COLORS["FAKE2"],
+            linestyle="",
+            markersize=9,
+            label="EDMGen",
+        ),
+    ]
+
     fig.legend(
-        handles=legend_handles,
+        handles=model_handles,
         loc="lower center",
-        ncol=len(models),
+        bbox_to_anchor=(0.38, 0.01),
+        ncol=len(model_handles),
         frameon=False,
+        title="Model",
     )
 
-    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    fig.legend(
+        handles=db_handles,
+        loc="lower center",
+        bbox_to_anchor=(0.78, 0.01),
+        ncol=2,
+        frameon=False,
+        title="Dataset",
+    )
+
+    fig.tight_layout(rect=(0, 0.10, 1, 1))
+
     return fig
+
+def make_paper_table(
+    corr_df: pd.DataFrame,
+    comparison_db: str,
+    corr_type: str = "pearson",
+) -> pd.DataFrame:
+
+    r_col = f"{corr_type}_r"
+    p_col = f"{corr_type}_p"
+
+    model_order = ["MobileNetV2", "ResNet50", "ViT16",]
+    metric_order = ["F1", "Accuracy",]
+    stat_order = ["mean", "entropy", "kurtosis", "skew",]
+    target_order = [("HSV", "V"), ("LAB", "L"), ("YCRCB", "Y"),]
+
+    df = corr_df[
+        (corr_df["DB1"] == "REAL") &
+        (corr_df["DB2"] == comparison_db)
+    ].copy()
+
+    df = df[
+        df.apply(
+            lambda row: (row["color_space"], row["ch"]) in target_order,
+            axis=1
+        )
+    ].copy()
+
+    target_name = {("HSV", "V"): "HSV(V)", ("LAB", "L"): "CIELab(L)", ("YCRCB", "Y"): "YCrCb(Y)",}
+    stat_name = {"mean": "Mean", "entropy": "Ent.", "kurtosis": "Kurt.", "skew": "Skew",}
+
+    df["target"] = df.apply(
+        lambda row: target_name[(row["color_space"], row["ch"])],
+        axis=1
+    )
+
+    df["stat"] = df["stat_metric"].map(stat_name)
+    df["model"] = pd.Categorical(
+        df["model"],
+        categories=model_order,
+        ordered=True
+    )
+
+    df["metric"] = pd.Categorical(
+        df["metric"],
+        categories=metric_order,
+        ordered=True
+    )
+
+    df["r_p"] = df.apply(
+        lambda row: (
+            f"{row[r_col]:.2f} (p={row[p_col]:.3f})"
+            if pd.notna(row[r_col]) and pd.notna(row[p_col])
+            else ""
+        ),
+        axis=1
+    )
+
+    table = df.pivot_table(
+        index=["model", "metric"],
+        columns=["target", "stat"],
+        values="r_p",
+        aggfunc="first",
+        observed=True,
+    )
+
+    desired_columns = []
+
+    for color_space, ch in target_order:
+        target = target_name[(color_space, ch)]
+
+        for stat in stat_order:
+            desired_columns.append(
+                (target, stat_name[stat])
+            )
+
+    table = table.reindex(columns=desired_columns)
+    table = table.sort_index()
+    table = table.round(2)
+
+    return table
 
 def main(seeds: list[int]) -> None:
 
     output_dir = PROJECT_ROOT / "results"
     output_dir.mkdir(parents=True, exist_ok=True)
+
     all_corr = []
+    all_analysis = []
+
+    color_stats_df = build_color_stats_df(
+        class_names=list(config.label_to_class.values()),
+        targets=TARGETS,
+    )
+
+    performance_df = load_performance_df(seeds)
 
     DBS = ["FAKE1", "FAKE2"]
-    for db in DBS:
-        color_stats_df = build_color_stats_df(class_names=list(config.label_to_class.values()), targets=TARGETS,)
-        performance_df = load_performance_df(seeds)
-        performance_diff_df = build_performance_diff_df(performance_df=performance_df,comparison_db=db,)
-        analysis_df = build_analysis_df(color_stats_df=color_stats_df, performance_diff_df=performance_diff_df,comparison_db=db,)
 
-        for color_space, channel in TARGETS:
-            target_df = analysis_df.query("color_space == @color_space and ch == @channel")
-            fig = plot_performance_gap(target_df, metric="F1",)
-            plot_path = (output_dir/ f"gap_{color_space}_{channel}_REAL_{db}_F1.png")
-            fig.savefig(plot_path, dpi=300, bbox_inches="tight",)
-            plt.close(fig)
-            print("saved:", plot_path)
+    for db in DBS:
+
+        performance_diff_df = build_performance_diff_df(
+            performance_df=performance_df,
+            comparison_db=db,
+        )
+
+        analysis_df = build_analysis_df(
+            color_stats_df=color_stats_df,
+            performance_diff_df=performance_diff_df,
+            comparison_db=db,
+        )
+
+        # 後でFAKE1 + FAKE2を結合する
+        all_analysis.append(analysis_df)
 
         corr_df = make_corr_table(analysis_df)
         all_corr.append(corr_df)
 
-    corr_all_df = pd.concat(all_corr, ignore_index=True)
-    corr_path = (output_dir / "corr_ALL_REAL_FAKE1_FAKE2.csv")
-    corr_all_df.to_csv(corr_path, index=False)
+    # =========================================
+    # FAKE1 + FAKE2
+    # =========================================
+    analysis_all_df = pd.concat(
+        all_analysis,
+        ignore_index=True
+    )
+
+    # =========================================
+    # Combined scatter plots
+    # =========================================
+    for color_space, channel in TARGETS:
+
+        target_df = analysis_all_df.query(
+            "color_space == @color_space and ch == @channel"
+        )
+
+        fig = plot_performance_gap(
+            target_df,
+            metric="F1",
+        )
+
+        plot_path = (
+            output_dir
+            / f"gap_{color_space}_{channel}_REAL_FAKE1_FAKE2_F1.png"
+        )
+
+        fig.savefig(
+            plot_path,
+            dpi=300,
+            bbox_inches="tight",
+        )
+
+        plt.close(fig)
+
+        print("saved:", plot_path)
+
+    # =========================================
+    # Correlation tables
+    # =========================================
+    corr_all_df = pd.concat(
+        all_corr,
+        ignore_index=True
+    )
+
+    corr_path = (
+        output_dir
+        / "corr_ALL_REAL_FAKE1_FAKE2.csv"
+    )
+
+    corr_all_df.to_csv(
+        corr_path,
+        index=False
+    )
+
     print("saved:", corr_path)
+
+    # SDGen
+    sdgen_table = make_paper_table(
+        corr_all_df,
+        comparison_db="FAKE1",
+        corr_type="pearson",
+    )
+
+    sdgen_path = (
+        output_dir
+        / "table_correlation_SDGen.csv"
+    )
+
+    sdgen_table.to_csv(sdgen_path)
+
+    # EDMGen
+    edmgen_table = make_paper_table(
+        corr_all_df,
+        comparison_db="FAKE2",
+        corr_type="pearson",
+    )
+
+    edmgen_path = (
+        output_dir
+        / "table_correlation_EDMGen.csv"
+    )
+
+    edmgen_table.to_csv(edmgen_path)
 
 if __name__ == "__main__":
     seeds = [12, 123, 1234,]
