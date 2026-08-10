@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 if __name__== "__main__":
 
+    seeds = [12, 123, 1234]
 
     dir = Path(config.PROJECT_ROOT) / "results"
 
@@ -18,11 +19,11 @@ if __name__== "__main__":
         for r in ratios:
 
             if r == 0:
-                csv_path = dir / f"{model}_FAKE1_REAL.csv"
+                csv_path = dir / f"{model}_FAKE1_REAL_{seed}.csv"
             elif r == 100:
-                csv_path = dir / f"{model}_REAL_REAL.csv"
+                csv_path = dir / f"{model}_REAL_REAL_{seed}.csv"
             else:
-                csv_path = dir / f"{model}_mix_{r}.csv"
+                csv_path = dir / f"{model}_MIX_{r}_{seed}.csv"
 
             df = pd.read_csv(csv_path)
 
