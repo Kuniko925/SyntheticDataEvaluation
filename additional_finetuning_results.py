@@ -296,6 +296,104 @@ def plot_metric(
 
     print("saved:", save_path)
 
+def save_metric_summary_csv(
+        training_df,
+        real_df,
+        result_dir,
+        max_epoch=50,
+):
+    target_df = training_df[
+        training_df["epoch"] <= max_epoch
+        ].copy()
+
+    summary = (
+        target_df
+        .groupby(
+            ["model", "class_id", "epoch"],
+            as_index=False
+        )["f1"]
+        .mean()
+        .rename(columns={"f1": "f1_mean"})
+    )
+
+    summary["class_name"] = summary["class_id"].map(
+        config.label_to_class
+    )
+
+    mean_table = summary.pivot(
+        index=["model", "class_id", "class_name"],
+        columns="epoch",
+        values="f1_mean"
+    )
+
+    epoch_list = sorted(mean_table.columns.tolist())
+
+    out_df = mean_table.reset_index()[
+        ["model", "class_id", "class_name"]
+    ].copy()
+
+    # Epoch 0
+    first_epoch = epoch_list[0]
+
+    out_df[f"Epoch_{int(first_epoch)}_mean"] = (
+        mean_table[first_epoch].to_numpy()
+    )
+
+    for prev_epoch, current_epoch in zip(
+            epoch_list[:-1],
+            epoch_list[1:]
+    ):
+        current_mean = mean_table[current_epoch]
+        prev_mean = mean_table[prev_epoch]
+
+        out_df[f"Epoch_{int(current_epoch)}_mean"] = (
+            current_mean.to_numpy()
+        )
+
+        out_df[
+            f"Improve_{int(prev_epoch)}_{int(current_epoch)}"
+        ] = (
+                current_mean - prev_mean
+        ).to_numpy()
+
+    real_summary = (
+        real_df
+        .groupby(
+            ["model", "class_id"],
+            as_index=False
+        )["f1"]
+        .mean()
+        .rename(columns={"f1": "REAL_mean"})
+    )
+
+    out_df = out_df.merge(
+        real_summary,
+        on=["model", "class_id"],
+        how="left"
+    )
+
+
+    numeric_cols = out_df.columns.difference(
+        ["model", "class_id", "class_name"]
+    )
+
+    out_df[numeric_cols] = (
+        out_df[numeric_cols].round(2)
+    )
+
+    out_path = (
+            result_dir
+            / f"finetune_f1_improvement_epoch0_{max_epoch}.csv"
+    )
+
+    out_df.to_csv(
+        out_path,
+        index=False
+    )
+
+    print("saved:", out_path)
+
+    return out_df
 
 if __name__ == "__main__":
 
@@ -327,9 +425,6 @@ if __name__ == "__main__":
         "ViT16": "tab:green",
     }
 
-    # ========================================
-    # Load all data
-    # ========================================
     training_df = build_training_df(
         result_dir,
         models,
@@ -343,9 +438,14 @@ if __name__ == "__main__":
         seeds
     )
 
-    # ========================================
+    summary_50_df = save_metric_summary_csv(
+        training_df=training_df,
+        real_df=real_df,
+        result_dir=result_dir,
+        max_epoch=50,
+    )
+
     # F1
-    # ========================================
     f1_summary = summarize_metric(
         training_df,
         metric="f1",
@@ -371,9 +471,7 @@ if __name__ == "__main__":
         ),
     )
 
-    # ========================================
     # Accuracy
-    # ========================================
     acc_summary = summarize_metric(
         training_df,
         metric="accuracy",

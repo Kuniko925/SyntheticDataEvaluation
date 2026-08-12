@@ -115,7 +115,7 @@ if __name__== "__main__":
     last_ax.legend(loc="center right", frameon=False)
 
     plt.tight_layout()
-    save_path = dir / "all_models_classwise_f1_lines.png"
+    save_path = dir / "all_mix_f1_lines.png"
     fig.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
