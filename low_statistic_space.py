@@ -94,12 +94,13 @@ def load_performance_df(seeds) -> pd.DataFrame:
                         continue
                     label = int(label_text)
 
-                    true_binary = (y_true == label)
-                    pred_binary = (y_pred == label)
+                    mask = (y_true == label)
+
                     acc = accuracy_score(
-                        true_binary,
-                        pred_binary
+                        y_true[mask],
+                        y_pred[mask]
                     )
+
                     rows.append({
                         "DB": db_name, "model": model, "label": label, "class_name": config.label_to_class[label], "Accuracy": acc, "F1": scores["f1-score"],})
 
@@ -166,13 +167,13 @@ def plot_performance_gap(
     stat_metrics = analysis_df["stat_metric"].unique()
     models = analysis_df["model"].unique()
 
-    ncols = 2
+    ncols = 4
     nrows = int(np.ceil(len(stat_metrics) / ncols))
 
     fig, axes = plt.subplots(
         nrows,
         ncols,
-        figsize=(7 * ncols, 5 * nrows),
+        figsize=(5 * ncols, 5 * nrows),
         squeeze=False,
         sharey=True,
     )
@@ -226,12 +227,15 @@ def plot_performance_gap(
                             (row["color_diff"], row[y_col]),
                             xytext=(4, 3),
                             textcoords="offset points",
-                            fontsize=10,
+                            fontsize=12,
                         )
 
-        ax.set_title(stat_metric)
-        ax.set_xlabel("Illumination distribution difference")
-        ax.set_ylabel(y_col)
+        ax.set_title(stat_metric,fontsize=18)
+        ax.set_xlabel("Distribution difference",fontsize=14)
+        if i % ncols == 0:
+            ax.set_ylabel(y_col,fontsize=14)
+        else:
+            ax.set_ylabel("")
         ax.grid(alpha=0.25)
 
     for ax in axes[len(stat_metrics):]:
@@ -245,7 +249,7 @@ def plot_performance_gap(
             marker=model_markers[model],
             color="black",
             linestyle="",
-            markersize=9,
+            markersize=10,
             label=model,
         )
         for model in models
@@ -260,7 +264,7 @@ def plot_performance_gap(
             color="none",
             markerfacecolor=DB_COLORS["FAKE1"],
             linestyle="",
-            markersize=9,
+            markersize=10,
             label="SDGen",
         ),
         Line2D(
@@ -270,7 +274,7 @@ def plot_performance_gap(
             color="none",
             markerfacecolor=DB_COLORS["FAKE2"],
             linestyle="",
-            markersize=9,
+            markersize=10,
             label="EDMGen",
         ),
     ]
@@ -282,6 +286,8 @@ def plot_performance_gap(
         ncol=len(model_handles),
         frameon=False,
         title="Model",
+        fontsize=14,
+        title_fontsize=14
     )
 
     fig.legend(
@@ -291,10 +297,12 @@ def plot_performance_gap(
         ncol=2,
         frameon=False,
         title="Dataset",
+        fontsize=14,
+        title_fontsize=14
     )
 
     fig.tight_layout(rect=(0, 0.10, 1, 1))
-
+    fig.subplots_adjust(wspace=0.12)
     return fig
 
 def make_paper_table(
@@ -407,7 +415,6 @@ def main(seeds: list[int]) -> None:
             comparison_db=db,
         )
 
-        # 後でFAKE1 + FAKE2を結合する
         all_analysis.append(analysis_df)
 
         corr_df = make_corr_table(analysis_df)

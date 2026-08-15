@@ -39,13 +39,11 @@ def build_training_df(result_dir, models, epochs, seeds):
 
                     class_id = int(label_text)
 
-                    # class-wise accuracy: one-vs-rest
-                    true_binary = (y_true == class_id)
-                    pred_binary = (y_pred == class_id)
+                    mask = (y_true == class_id)
 
                     class_acc = accuracy_score(
-                        true_binary,
-                        pred_binary
+                        y_true[mask],
+                        y_pred[mask]
                     )
 
                     rows.append({
@@ -87,21 +85,20 @@ def build_real_df(result_dir, models, seeds):
 
                 class_id = int(label_text)
 
-                true_binary = (y_true == class_id)
-                pred_binary = (y_pred == class_id)
+                mask = (y_true == class_id)
 
                 class_acc = accuracy_score(
-                    true_binary,
-                    pred_binary
+                    y_true[mask],
+                    y_pred[mask]
                 )
 
                 rows.append({
-                    "model": model,
-                    "seed": seed,
-                    "class_id": class_id,
-                    "f1": scores["f1-score"],
-                    "accuracy": class_acc,
-                })
+                        "model": model,
+                        "seed": seed,
+                        "class_id": class_id,
+                        "f1": scores["f1-score"],
+                        "accuracy": class_acc,
+                    })
 
     return pd.DataFrame(rows)
 

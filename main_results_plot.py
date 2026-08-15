@@ -41,14 +41,8 @@ if __name__ == "__main__":
                     # class-wise F1
                     f1 = report_dict[str(cls)]["f1-score"]
 
-                    # class-wise accuracy (one-vs-rest)
-                    true_binary = (y_true == cls)
-                    pred_binary = (y_pred == cls)
-
-                    acc = accuracy_score(
-                        true_binary,
-                        pred_binary
-                    )
+                    mask = (y_true == cls)
+                    acc = (y_pred[mask] == cls).mean()
 
                     all_rows.append({
                         "db": db,

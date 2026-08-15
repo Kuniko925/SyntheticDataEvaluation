@@ -33,13 +33,12 @@ def main(models: list[str], seeds: list[int]) -> None:
             labels = sorted(set(y_true.unique()) | set(y_pred.unique()))
 
             for label in labels:
+                mask = y_true == label
+
+                label_accuracy = (y_pred[mask] == label).mean()
+
                 y_true_binary = (y_true == label).astype(int)
                 y_pred_binary = (y_pred == label).astype(int)
-
-                label_accuracy = accuracy_score(
-                    y_true_binary,
-                    y_pred_binary,
-                )
 
                 label_f1 = f1_score(
                     y_true_binary,
@@ -75,12 +74,12 @@ def main(models: list[str], seeds: list[int]) -> None:
     )
 
     summary_df["accuracy"] = summary_df.apply(
-        lambda r: f"{r['accuracy_mean']:.2f}±{r['accuracy_std']:.2f}",
+        lambda r: f"{r['accuracy_mean']:.3f}±{r['accuracy_std']:.3f}",
         axis=1,
     )
 
     summary_df["f1"] = summary_df.apply(
-        lambda r: f"{r['f1_mean']:.2f}±{r['f1_std']:.2f}",
+        lambda r: f"{r['f1_mean']:.3f}±{r['f1_std']:.3f}",
         axis=1,
     )
 

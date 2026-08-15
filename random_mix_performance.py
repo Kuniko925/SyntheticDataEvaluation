@@ -61,7 +61,7 @@ def plot_improvement_ci_distribution(
     ) / sem
 
     fig, ax = plt.subplots(
-        figsize=(8, 5)
+        figsize=(5, 4)
     )
 
 
@@ -112,19 +112,25 @@ def plot_improvement_ci_distribution(
         label=f"CI Upper = {ci_high:.3f}"
     )
 
+    ax.set_xlim(0.01, 0.4)
     ax.set_xlabel(
         f"F1 Improvement ({from_ratio}% → {to_ratio}%)",
-        fontsize=13
+        fontsize=14
     )
 
     ax.set_ylabel(
         "Density",
-        fontsize=13
+        fontsize=14
     )
+
+    if from_ratio == 0 and to_ratio == 30:
+        legend_loc = "upper left"
+    else:
+        legend_loc = "upper right"
 
     ax.legend(
         frameon=False,
-        loc="upper right"
+        loc=legend_loc
     )
 
     ax.grid(
@@ -221,31 +227,31 @@ def main(models, ratios, seeds, dir):
 
     plot_improvement_ci_distribution(
         summary_df,
-        from_ratio=20,
+        from_ratio=0,
         to_ratio=30,
         save_path=(
                 dir /
-                "f1_improvement_20_30_ci95.png"
+                "f1_improvement_0_30_ci95.png"
         )
     )
 
     plot_improvement_ci_distribution(
         summary_df,
-        from_ratio=40,
-        to_ratio=50,
+        from_ratio=30,
+        to_ratio=60,
         save_path=(
                 dir /
-                "f1_improvement_40_50_ci95.png"
+                "f1_improvement_30_60_ci95.png"
         )
     )
 
     plot_improvement_ci_distribution(
         summary_df,
         from_ratio=60,
-        to_ratio=70,
+        to_ratio=90,
         save_path=(
                 dir /
-                "f1_improvement_60_70_ci95.png"
+                "f1_improvement_60_90_ci95.png"
         )
     )
 
@@ -350,6 +356,7 @@ def main(models, ratios, seeds, dir):
         loc="lower center",
         ncol=3,
         frameon=False,
+        fontsize=14,
     )
 
     fig.tight_layout(

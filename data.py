@@ -93,53 +93,6 @@ def get_test_data(db):
     df = df[df['rf'] == db]
     return df
 
-def get_dataset(db):
-    test_size = 0.2
-
-    if db == "MIX":
-        save_filepath = config.PROJECT_ROOT / f'cifake3/train.csv'
-    else:
-        save_filepath = config.PROJECT_ROOT / f'{config.CFG[db]["DB"]}/train.csv'
-
-    df = load_csv_and_fix_filepath(save_filepath, config.PROJECT_ROOT)
-    df_real = df[df['rf'] == 'REAL'].copy()
-    df_fake = df[df['rf'] == 'FAKE'].copy()
-    df_train_r, df_valid_r = train_test_split(df_real, test_size=test_size, random_state=seed, shuffle=True)
-    df_train_f, df_valid_f = train_test_split(df_fake, test_size=test_size, random_state=seed, shuffle=True)
-
-    if db == "MIX":
-        save_filepath = config.PROJECT_ROOT / f'cifake3/test.csv'
-    else:
-        save_filepath = config.PROJECT_ROOT / f'{config.CFG[db]["DB"]}/test.csv'
-
-    df_test = load_csv_and_fix_filepath(save_filepath, config.PROJECT_ROOT)
-    df_test_r = df_test[df_test['rf'] == 'REAL'].copy()
-    df_test_f = df_test[df_test['rf'] == 'FAKE'].copy()
-
-    df_train_r = add_image_column(df_train_r)
-    df_valid_r = add_image_column(df_valid_r)
-    df_train_f = add_image_column(df_train_f)
-    df_valid_f = add_image_column(df_valid_f)
-    df_test_r = add_image_column(df_test_r)
-    df_test_f = add_image_column(df_test_f)
-
-    return df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f
-
-
-
-def get_dataloaders(df_train_r, df_valid_r, df_test_r, df_train_f, df_valid_f, df_test_f, batch_size=32, img_size=(32, 32)):
-
-    label_encoder = LabelEncoder()
-    label_encoder.fit(df_train_r["label"])
-    train_loader_r = get_dataloader(df_train_r, img_size, batch_size, label_encoder, train=True)
-    valid_loader_r = get_dataloader(df_valid_r, img_size, batch_size, label_encoder, train=False)
-    test_loader_r = get_dataloader(df_test_r, img_size, batch_size, label_encoder, train=False)
-    train_loader_f = get_dataloader(df_train_f, img_size, batch_size, label_encoder, train=True)
-    valid_loader_f = get_dataloader(df_valid_f, img_size, batch_size, label_encoder, train=False)
-    test_loader_f = get_dataloader(df_test_f, img_size, batch_size, label_encoder, train=False)
-
-    return train_loader_r, valid_loader_r, test_loader_r, train_loader_f, valid_loader_f, test_loader_f
-
 def stratified_sample(df, label_col="label", frac=0.20, random_state=seed):
     return df.groupby(label_col, group_keys=False).sample(frac=frac, random_state=random_state).reset_index(drop=True)
 
