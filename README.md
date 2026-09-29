@@ -8,6 +8,25 @@ Abstract: Synthetic images are increasingly used to overcome shortages of real t
 
 ### Code Information and Usage
 
+Training scripts:
+
+| File | Training procedure | Evaluation data |
+|---|---|---|
+| [main.py](main.py) | Runs baseline experiments by training models separately on REAL, SDGen, and EDMGen. | REAL, SDGen, and EDMGen |
+| [random_mix_training.py](random_mix_training.py) | Trains models on mixtures of REAL and SDGen sampled within each class, varying the REAL proportion from 10% to 90% in 10% increments. | REAL |
+| [one_class_replacement.py](one_class_replacement.py) | Trains models after replacing one class in SDGen with REAL images of the same class. The current target is frog (label 6). | REAL |
+| [additional_finetuning.py](additional_finetuning.py) | Further fine-tunes models previously trained on SDGen using 10% of each class from the REAL training and validation sets. Runs for 150 epochs, saving and evaluating checkpoints every 10 epochs. | REAL |
+
+Shared training and data preparation components:
+
+| File | Role |
+|---|---|
+| [finetune.py](finetune.py) | Implements training and validation loops, optimization, and checkpoint saving. Uses SGD for CNNs and AdamW for ViT. |
+| [model.py](model.py) | Loads ImageNet-pretrained models and defines output layers for 10-class classification. |
+| [train_settings.py](train_settings.py) | Defines learning rates, batch sizes, input image sizes, and epoch counts. |
+| [data.py](data.py) | Handles data loading, training/validation splits, image transformations, and DataLoader creation. |
+| [train_utils.py](train_utils.py) | Provides seed configuration, sampling within each class, and evaluation result export to CSV. |
+| [preparing.py](preparing.py) | Creates train.csv and test.csv from the image directories. |
 
 ### Requirements
 The Python dependencies required to run the code are listed in `requirements.txt`.

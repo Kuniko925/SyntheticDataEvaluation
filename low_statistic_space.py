@@ -227,15 +227,18 @@ def plot_performance_gap(
                             (row["color_diff"], row[y_col]),
                             xytext=(4, 3),
                             textcoords="offset points",
-                            fontsize=12,
+                            fontsize=16,
                         )
 
-        ax.set_title(stat_metric,fontsize=18)
-        ax.set_xlabel("Distribution difference",fontsize=14)
+        ax.set_title(stat_metric, fontsize=24, pad=12)
+        ax.set_xlabel("Distribution difference", fontsize=20, labelpad=10)
         if i % ncols == 0:
-            ax.set_ylabel(y_col,fontsize=14)
+            ax.set_ylabel(y_col, fontsize=20, labelpad=10)
         else:
             ax.set_ylabel("")
+        ax.tick_params(axis="both", labelsize=16)
+        ax.xaxis.get_offset_text().set_fontsize(16)
+        ax.yaxis.get_offset_text().set_fontsize(16)
         ax.grid(alpha=0.25)
 
     for ax in axes[len(stat_metrics):]:
@@ -279,27 +282,26 @@ def plot_performance_gap(
         ),
     ]
 
-    fig.legend(
-        handles=model_handles,
+    # Text-only entries put each legend heading to the left of its items.
+    legend_handles = [
+        Line2D([], [], linestyle="", label="Model:"),
+        *model_handles,
+        Line2D([], [], linestyle="", label="Dataset:"),
+        *db_handles,
+    ]
+    legend = fig.legend(
+        handles=legend_handles,
         loc="lower center",
-        bbox_to_anchor=(0.38, 0.01),
-        ncol=len(model_handles),
+        bbox_to_anchor=(0.5, 0.01),
+        ncol=len(legend_handles),
         frameon=False,
-        title="Model",
-        fontsize=14,
-        title_fontsize=14
+        fontsize=20,
+        handlelength=1.0,
+        handletextpad=0.5,
+        columnspacing=1.2,
     )
-
-    fig.legend(
-        handles=db_handles,
-        loc="lower center",
-        bbox_to_anchor=(0.78, 0.01),
-        ncol=2,
-        frameon=False,
-        title="Dataset",
-        fontsize=14,
-        title_fontsize=14
-    )
+    for index in (0, len(model_handles) + 1):
+        legend.get_texts()[index].set_fontweight("bold")
 
     fig.tight_layout(rect=(0, 0.10, 1, 1))
     fig.subplots_adjust(wspace=0.12)

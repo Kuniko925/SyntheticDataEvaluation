@@ -167,10 +167,12 @@ def plot_metric(
 
         ax.set_title(
             config.label_to_class[class_id],
-            fontsize=14
+            fontsize=24,
+            pad=10,
         )
 
         ax.set_ylim(0, 1)
+        ax.tick_params(axis="both", labelsize=16)
 
         for model in models:
 
@@ -233,7 +235,7 @@ def plot_metric(
             transform=ax.transAxes,
             ha="right",
             va="bottom",
-            fontsize=9,
+            fontsize=14,
             bbox=dict(
                 boxstyle="round,pad=0.3",
                 facecolor="white",
@@ -250,13 +252,15 @@ def plot_metric(
         if idx // 5 == 1:
             ax.set_xlabel(
                 "Epochs",
-                fontsize=13
+                fontsize=20,
+                labelpad=8,
             )
 
         if idx % 5 == 0:
             ax.set_ylabel(
                 settings["ylabel"],
-                fontsize=13
+                fontsize=20,
+                labelpad=8,
             )
 
     legend_handles = [
@@ -277,10 +281,11 @@ def plot_metric(
         loc="lower center",
         ncol=len(models),
         frameon=False,
+        fontsize=20,
     )
 
     fig.tight_layout(
-        rect=(0, 0.07, 1, 1)
+        rect=(0, 0.10, 1, 1)
     )
 
     fig.savefig(

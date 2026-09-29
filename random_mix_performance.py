@@ -277,10 +277,12 @@ def main(models, ratios, seeds, dir):
 
         ax.set_title(
             config.label_to_class[c],
-            fontsize=14
+            fontsize=24,
+            pad=10,
         )
 
         ax.set_ylim(0, 1)
+        ax.tick_params(axis="both", labelsize=16)
 
         for model in models:
             dm = summary_df[
@@ -328,13 +330,15 @@ def main(models, ratios, seeds, dir):
         if idx // 5 == 1:
             ax.set_xlabel(
                 "REAL Ratio (%)",
-                fontsize=13
+                fontsize=20,
+                labelpad=8,
             )
 
         if idx % 5 == 0:
             ax.set_ylabel(
                 "F1",
-                fontsize=13
+                fontsize=20,
+                labelpad=8,
             )
 
 
@@ -356,11 +360,11 @@ def main(models, ratios, seeds, dir):
         loc="lower center",
         ncol=3,
         frameon=False,
-        fontsize=14,
+        fontsize=20,
     )
 
     fig.tight_layout(
-        rect=(0, 0.07, 1, 1)
+        rect=(0, 0.10, 1, 1)
     )
 
     save_path = dir / "all_mix_f1_mean_std_lines.png"
