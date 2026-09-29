@@ -1,0 +1,24 @@
+# Direct runtime dependencies for training, analysis, and plotting.
+# For CUDA, install a compatible torch/torchvision pair for your platform first:
+# https://pytorch.org/get-started/locally/
+torch>=2.2
+torchvision>=0.17
+# DINOv3 support requires Transformers 4.56 or later.
+# Keep the 4.x API used by the CLIP embedding code.
+transformers>=4.56,<5
+
+# Image loading and color-space processing (PIL and cv2).
+Pillow
+opencv-python
+
+# Numerical analysis, tabular data, metrics, and dimensionality reduction.
+numpy
+pandas
+scipy
+scikit-learn
+umap-learn
+
+# Plotting and progress reporting.
+matplotlib
+seaborn
+tqdm
