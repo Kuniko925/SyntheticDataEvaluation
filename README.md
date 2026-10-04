@@ -5,6 +5,11 @@ Abstract: Synthetic images are increasingly used to overcome shortages of real t
 
 ### Dataset Information
 
+| Dataset | Source | Description |
+|---|---|---|
+| REAL CIFAR-10 | [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) | Real images from CIFAR-10. |
+| SDGen CIFAKE | [CIFAKE](https://www.kaggle.com/datasets/birdy654/cifake-real-and-ai-generated-synthetic-images) | Synthetic images generated using Stable Diffusion. |
+| EDMGen | [EDM repository](https://github.com/nvlabs/edm) | We followed the procedure described in the repository README to generate images using the pretrained conditional model for CIFAR-10 provided in Pickle format. The number of generated images was set to match that of CIFAKE. |
 
 ### Code Information and Usage
 
